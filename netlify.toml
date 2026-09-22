@@ -13,3 +13,5 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Browser calls local Django on your laptop (same Wi‑Fi). Keep Django: runserver 0.0.0.0:8000
+  NEXT_PUBLIC_API_ORIGIN = "http://192.168.2.105:8000"
