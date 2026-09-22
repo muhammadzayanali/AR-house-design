@@ -86,3 +86,17 @@ Notes: _______________
 | Hit-test + placement UX | Bylaw compliance |
 | Same HouseRenderer as desktop 3D | Photoreal CGI quality |
 | Approximate real-world scale | Automated CI coverage |
+
+---
+
+## Phone AR still fails after Enter AR
+
+`isSessionSupported` can say yes while `requestSession` still fails (missing ARCore, old Play Services, non‑certified device).
+
+1. Install / update **Google Play Services for AR** from Play Store  
+2. Update **Chrome**  
+3. Site settings → allow **Camera** (and AR if shown)  
+4. Use **HTTPS** (Netlify) — plain `http://LAN_IP` cannot start WebXR AR  
+5. Hard refresh, retry **Enter AR** outdoors/indoors with good light  
+
+If it still fails, the phone may not be ARCore‑certified. Use **manual 15×12 → Continue** — that is a valid full FYP path (style → design → 3D / place).

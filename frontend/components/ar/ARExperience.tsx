@@ -172,15 +172,23 @@ export default function ARExperience() {
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
       const configUnsupported =
-        /session configuration is not supported/i.test(raw);
+        /session configuration is not supported|NotSupportedError/i.test(raw);
+      const insecure = /WebXR needs HTTPS|secure context/i.test(raw);
       const noWebXr = /WebXR not supported|Immersive AR is not supported/i.test(
         raw,
       );
-      if (configUnsupported || noWebXr) {
+      if (insecure) {
+        setError(raw);
+      } else if (configUnsupported || noWebXr) {
         setError(
-          "AR could not start on this phone. Your 15×12 manual values already work — tap Continue to style choice. Or update Chrome + “Google Play Services for AR”, then retry Enter AR.",
+          [
+            "This phone could not open a WebXR AR session (ARCore/Chrome limit).",
+            "FYP demo still works: keep 15×12 → tap Continue to style choice.",
+            "To fix AR on-device: install/update “Google Play Services for AR”, update Chrome, allow Camera + AR when prompted, close other AR apps, then hard-refresh and retry Enter AR.",
+            `(${raw})`,
+          ].join(" "),
         );
-      } else if (/not connected to three\.js|canvas is not yet loaded/i.test(raw)) {
+      } else if (/not connected to three\.js|still loading/i.test(raw)) {
         setError(
           "3D view was still loading. Wait 2 seconds and tap Enter AR again.",
         );

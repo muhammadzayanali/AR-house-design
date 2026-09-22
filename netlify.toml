@@ -17,3 +17,11 @@
   # Keep tunnel alive: npx -y localtunnel --port 8000
   # CORS already allows Bypass-Tunnel-Reminder for Android Chrome.
   NEXT_PUBLIC_API_ORIGIN = "https://late-zebras-end.loca.lt"
+
+# Allow WebXR / camera for immersive AR on Android Chrome.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "xr-spatial-tracking=*, camera=*, microphone=()"
+    Feature-Policy = "xr-spatial-tracking *; camera *"
+

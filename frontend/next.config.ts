@@ -25,6 +25,19 @@ const nextConfig: NextConfig = {
       { source: "/media/:path*", destination: `${djangoOrigin}/media/:path*` },
     ];
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Permissions-Policy",
+            value: "xr-spatial-tracking=*, camera=*, microphone=()",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,15 +1,17 @@
 "use client";
 
 import { createXRStore } from "@react-three/xr";
+import type { WebGLRenderer } from "three";
+
+type XRManager = WebGLRenderer["xr"];
 
 /**
- * Mutable session init — @pmndrs/xr defaults to requiredFeatures: ['local-floor'],
- * which many Android Chrome/ARCore phones reject with:
- * "The specified session configuration is not supported."
+ * Mutable session init used by @pmndrs/xr when it builds its own request.
+ * We prefer starting the session ourselves (see enterAndroidAR) so we fully
+ * control features + DOM overlay root.
  *
- * IMPORTANT: use the store's own domOverlayRoot (a dedicated body child).
- * Do NOT pass #plotline-ar-overlay — that node contains the WebGL canvas and
- * breaks DOM Overlay / session start on Android Chrome.
+ * Never use #plotline-ar-overlay as the DOM overlay root — it contains the
+ * WebGL canvas and breaks Android Chrome session start.
  */
 export const androidArSessionInit: XRSessionInit = {
   requiredFeatures: [],
@@ -26,16 +28,20 @@ export const xrStore = createXRStore({
   handTracking: false,
   bodyTracking: false,
   layers: false,
+  // Avoid auto offerSession racing our explicit Enter AR gesture.
+  offerSession: false,
+  enterGrantedSession: false,
 });
 
-// Prefer `local` over `local-floor` — Three.js defaults to local-floor and that
-// fails on some ARCore devices even when immersive-ar is reported as supported.
+let xrManager: XRManager | null = null;
+
 const setManager = xrStore.setWebXRManager.bind(xrStore);
 xrStore.setWebXRManager = (manager) => {
+  xrManager = manager;
   try {
     manager.setReferenceSpaceType("local");
   } catch {
-    /* older three.js */
+    /* ignore */
   }
   setManager(manager);
 };
@@ -44,6 +50,7 @@ type SessionAttempt = {
   requiredFeatures: string[];
   optionalFeatures: string[];
   useDomOverlay: boolean;
+  space: XRReferenceSpaceType;
 };
 
 const SESSION_ATTEMPTS: SessionAttempt[] = [
@@ -51,92 +58,120 @@ const SESSION_ATTEMPTS: SessionAttempt[] = [
     requiredFeatures: [],
     optionalFeatures: ["hit-test", "dom-overlay", "local", "local-floor"],
     useDomOverlay: true,
+    space: "local",
   },
   {
     requiredFeatures: ["hit-test"],
-    optionalFeatures: ["dom-overlay", "local", "local-floor"],
+    optionalFeatures: ["dom-overlay", "local"],
     useDomOverlay: true,
+    space: "local",
   },
   {
     requiredFeatures: [],
-    optionalFeatures: ["hit-test", "local", "local-floor"],
+    optionalFeatures: ["hit-test", "local"],
     useDomOverlay: false,
+    space: "local",
   },
   {
-    requiredFeatures: ["local"],
-    optionalFeatures: ["hit-test", "dom-overlay"],
+    requiredFeatures: [],
+    optionalFeatures: ["dom-overlay"],
     useDomOverlay: true,
+    space: "local",
   },
   {
     requiredFeatures: [],
     optionalFeatures: [],
     useDomOverlay: false,
+    space: "local",
   },
 ];
 
 function overlayRoot(): Element {
-  const fromStore = xrStore.getState().domOverlayRoot;
-  if (fromStore) return fromStore;
-  return document.body;
+  return xrStore.getState().domOverlayRoot ?? document.body;
 }
 
-async function waitForXrManager(timeoutMs = 4000) {
+function formatXrError(err: unknown): Error {
+  if (err instanceof DOMException) {
+    return new Error(`${err.name}: ${err.message}`);
+  }
+  if (err instanceof Error) return err;
+  return new Error(String(err));
+}
+
+async function waitForXrManager(timeoutMs = 5000) {
   const start = performance.now();
   while (performance.now() - start < timeoutMs) {
-    try {
-      // enterAR rejects immediately with "not connected" if manager is missing;
-      // we probe via a no-op: if navigator.xr exists and canvas XR is wired,
-      // the store's internal manager is set by <XR> on first render.
-      // Soft check: canvas WebGL XR flag.
-      const canvas = document.querySelector("canvas");
-      const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
-      // R3F attaches xr on the renderer, not the raw context — presence of canvas is enough signal.
-      if (canvas && canvas.width > 0) return;
-    } catch {
-      /* keep waiting */
-    }
-    await new Promise((r) => setTimeout(r, 100));
+    if (xrManager) return;
+    await new Promise((r) => setTimeout(r, 50));
   }
 }
 
-/** Start immersive-ar with fallbacks for picky Android WebXR implementations. */
+/**
+ * Start immersive-ar via native requestSession, then hand the session to Three.
+ * Falls back through soft feature sets for picky Android / ARCore phones.
+ */
 export async function enterAndroidAR() {
   if (typeof navigator === "undefined" || !navigator.xr) {
     throw new Error("WebXR not supported");
   }
+  if (!window.isSecureContext) {
+    throw new Error(
+      "WebXR needs HTTPS. Open the Netlify site or use npm run dev:https — plain http://LAN IP cannot start AR.",
+    );
+  }
+
   const supported = await navigator.xr.isSessionSupported("immersive-ar");
   if (!supported) {
     throw new Error("Immersive AR is not supported on this browser/device");
   }
 
   await waitForXrManager();
+  if (!xrManager) {
+    throw new Error(
+      "3D view was still loading. Wait 2 seconds and tap Enter AR again.",
+    );
+  }
+
+  // End any stale session before retrying.
+  try {
+    const existing = xrManager.getSession?.();
+    if (existing) await existing.end();
+  } catch {
+    /* ignore */
+  }
 
   const root = overlayRoot();
   let lastError: unknown;
 
   for (const attempt of SESSION_ATTEMPTS) {
-    androidArSessionInit.requiredFeatures = [...attempt.requiredFeatures];
-    androidArSessionInit.optionalFeatures = [...attempt.optionalFeatures];
+    const init: XRSessionInit = {
+      requiredFeatures: [...attempt.requiredFeatures],
+      optionalFeatures: [...attempt.optionalFeatures],
+    };
     if (attempt.useDomOverlay) {
-      androidArSessionInit.domOverlay = { root };
-    } else {
-      delete androidArSessionInit.domOverlay;
+      init.domOverlay = { root };
     }
 
+    // Keep pmndrs copy in sync (in case anything else reads it).
+    androidArSessionInit.requiredFeatures = init.requiredFeatures;
+    androidArSessionInit.optionalFeatures = init.optionalFeatures;
+    if (init.domOverlay) androidArSessionInit.domOverlay = init.domOverlay;
+    else delete androidArSessionInit.domOverlay;
+
     try {
-      await xrStore.enterAR();
+      try {
+        xrManager.setReferenceSpaceType(attempt.space);
+      } catch {
+        /* ignore */
+      }
+
+      const session = await navigator.xr.requestSession("immersive-ar", init);
+      await xrManager.setSession(session);
       return;
     } catch (err) {
       lastError = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      // Canvas / <XR> not ready yet — brief pause then continue attempts
-      if (/not connected to three\.js|canvas is not yet loaded/i.test(msg)) {
-        await new Promise((r) => setTimeout(r, 250));
-      }
     }
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("AR session could not start on this device");
+  throw formatXrError(lastError ?? new Error("AR session could not start"));
 }
