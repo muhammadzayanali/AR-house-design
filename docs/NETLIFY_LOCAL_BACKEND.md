@@ -44,7 +44,10 @@ Do **not** set `HF_TOKEN` on Netlify.
 | Branch | `devel` |
 | Base directory | `frontend` |
 | Build command | `npm run build` |
-| Publish directory | *(empty / Next.js default)* |
+| Publish directory | **empty** or `.next` — **never** `frontend` |
+
+If publish = base (`frontend`), `@netlify/plugin-nextjs` fails with:
+`Your publish directory cannot be the same as the base directory`
 
 ## 5. Phone / demo
 
