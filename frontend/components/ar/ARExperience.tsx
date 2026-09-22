@@ -37,7 +37,7 @@ import type {
 } from "@/lib/types";
 import { ACCURACY_DISCLAIMER, UNIT_CAVEAT } from "@/lib/types";
 import { formatPkr, sqmToUnits } from "@/lib/units/land";
-import { xrStore } from "@/lib/xr/store";
+import { xrStore, enterAndroidAR } from "@/lib/xr/store";
 import {
   detectImmersiveAR,
   supportMessage,
@@ -168,14 +168,16 @@ export default function ARExperience() {
   async function enterAR() {
     setError(null);
     try {
-      await xrStore.enterAR();
+      await enterAndroidAR();
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
       const unsupported =
-        /session configuration is not supported|not supported/i.test(raw);
+        /session configuration is not supported|not supported|WebXR not supported/i.test(
+          raw,
+        );
       setError(
         unsupported
-          ? "AR session could not start on this phone (WebXR config). Use manual length × width below, or update Chrome + Google Play Services for AR."
+          ? "AR could not start on this phone. Use manual length × width below (works for the full FYP demo), or update Chrome + “Google Play Services for AR”, then retry Enter AR."
           : raw || "Could not start AR",
       );
     }
@@ -441,7 +443,7 @@ export default function ARExperience() {
   );
 
   return (
-    <div className="ar-lock relative bg-ink text-paper">
+    <div id="plotline-ar-overlay" className="ar-lock relative bg-ink text-paper">
       {/* Full-bleed 3D when a design is selected (desktop) */}
       {showPreview && (
         <div className="absolute inset-0 z-0">
