@@ -46,6 +46,8 @@ export type HouseDesign = {
   active?: boolean;
   room_program?: Record<string, number | boolean>;
   plot_range?: { min_sqm: number; max_sqm: number };
+  match_reason?: string;
+  compatibility?: "exact" | "nearby" | string;
 };
 
 export type ArchStyleCard = {
