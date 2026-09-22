@@ -1,22 +1,24 @@
 # AR Manual Testing Procedure (Physical Device)
 
-This is **manual** verification. It is **not** covered by Django unit tests or Playwright E2E.
-
-Automated browser tests **mock / skip** WebXR. Passing CI does **not** prove AR works on a phone.
+```text
+Physical WebXR testing is MANUAL.
+Automated tests (Django / TypeScript / ESLint / build / Playwright) do NOT prove physical AR.
+Playwright mocks / skips WebXR. Passing CI does not mean AR works on a phone.
+```
 
 ---
 
-## Requirements
+## Requirements (environment)
 
 | Requirement | Notes |
 |-------------|--------|
-| Android phone | ARCore-capable device |
-| Chrome | Latest stable (not Samsung Internet) |
+| Android phone | **ARCore-capable** (see [ARCore device list](https://developers.google.com/ar/devices)) |
+| Chrome | Latest stable (**not** Samsung Internet; **not** iPhone Chrome/Safari for immersive-ar) |
 | Google Play Services for AR | Installed / up to date |
-| HTTPS | `npm run dev:https` or deployed HTTPS URL |
-| Same Wi‑Fi | Phone ↔ laptop for LAN demo |
+| HTTPS | Netlify HTTPS or `npm run dev:https` — plain `http://LAN` often cannot start WebXR |
+| Backend running | Django `0.0.0.0:8000` (+ tunnel if Netlify → laptop API) |
+| Frontend running | Netlify or Next `:3000` |
 | Camera permission | Grant when prompted |
-| Backend + frontend running | Django `:8000`, Next `:3000` |
 
 ---
 
@@ -26,37 +28,64 @@ Automated browser tests **mock / skip** WebXR. Passing CI does **not** prove AR 
 1 Three.js / WebXR world unit = 1 metre
 ```
 
+**Do not add an AR scale slider.** True-scale visualization is intentional.
+
 Italian Compact Villa footprint **10 m × 9 m** must appear roughly that size relative to the measured plot when placed.
+
+```text
+AR scale correctness ≠ survey-grade measurement accuracy
+```
 
 ---
 
-## Test procedure
+## Manual AR flow checklist
+
+```text
+Open application
+→ Login/register
+→ Open Measure/AR
+→ Enter AR
+→ Grant camera
+→ Move phone
+→ Ground reticle (gold ring) appears
+→ Mark plot corners (3–8 points)
+→ Finish measurement
+→ Area / Marla displayed
+→ Select style (e.g. Italian Villa)
+→ Select compatible design (e.g. Italian Compact Villa)
+→ Open 3D (same HouseRenderer)
+→ Enter AR (if not already)
+→ Place house
+→ Walk around — verify ~true scale
+→ Reset placement
+→ Exit AR
+```
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Open `https://<LAN_IP>:3000` in Android Chrome | Site loads (cert warning OK for dev) |
+| 1 | Open HTTPS app in Android Chrome | Site loads |
 | 2 | Login / register | Dashboard accessible |
 | 3 | Open AR / Measure | Setup HUD visible |
 | 4 | Tap **Enter AR** | Immersive session starts |
 | 5 | Grant camera | Live camera feed |
-| 6 | Move phone slowly | Gold reticle appears on ground |
-| 7 | Mark 4 corners of a known rectangle (e.g. ~15×12 m if known) | Points accumulate |
+| 6 | Move phone slowly | Gold reticle on ground |
+| 7 | Mark corners (e.g. ~15×12 m if known) | Points accumulate |
 | 8 | Finish measurement | Area ≈ expected m² / Marla |
-| 9 | Choose style (e.g. Italian Villa) | Style cards |
-| 10 | Select compatible design | Exact badge + match reason |
+| 9 | Choose style (Italian Villa) | Style cards (8 styles) |
+| 10 | Select compatible design | Exact / closest fit + why-it-fits |
 | 11 | View 3D / continue | Same house in Orbit viewer |
 | 12 | Place house on plot | Model anchors on hit point |
 | 13 | Walk around | Same design, ~true scale |
 | 14 | Reset placement | Model clears; can place again |
 | 15 | Exit AR | Returns to non-immersive UI |
 
-### Fallback test (unsupported device)
+### Fallback (unsupported / failed WebXR)
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Open on laptop / iOS Safari | Clear “AR unavailable” message |
-| 2 | Enter manual L×W (15×12) | Area 180 m² shown |
-| 3 | Style → design → 3D | Works without WebXR |
+| 1 | Laptop / iOS / non-ARCore phone | Clear AR unavailable or session-fail message |
+| 2 | Manual L×W **15×12** | Area **180 m²** / **7.12 Marla** |
+| 3 | Style → design → 3D | Full FYP path without WebXR |
 
 ---
 
@@ -64,6 +93,7 @@ Italian Compact Villa footprint **10 m × 9 m** must appear roughly that size re
 
 ```text
 Device: _______________
+ARCore listed? Y/N
 Chrome version: _______________
 Date: _______________
 HTTPS URL: _______________
@@ -74,6 +104,14 @@ Design: _______________
 Scale looks correct? Y/N
 Placement/reset works? Y/N
 Notes: _______________
+
+Physical WebXR result: PASS / FAIL / BLOCKED (device)
+```
+
+Until this sheet is filled on a real compatible Android device, release status remains:
+
+```text
+Physical WebXR: MANUAL — PENDING DEVICE VERIFICATION
 ```
 
 ---
@@ -82,10 +120,10 @@ Notes: _______________
 
 | Proves | Does not prove |
 |--------|----------------|
-| WebXR session starts on this device | Survey-grade accuracy |
-| Hit-test + placement UX | Bylaw compliance |
+| WebXR session starts on **this** device | Survey-grade accuracy |
+| Hit-test + placement UX | Bylaw / FAR / setback compliance |
 | Same HouseRenderer as desktop 3D | Photoreal CGI quality |
-| Approximate real-world scale | Automated CI coverage |
+| Approximate real-world scale | Automated CI coverage of AR |
 
 ---
 
@@ -93,10 +131,10 @@ Notes: _______________
 
 `isSessionSupported` can say yes while `requestSession` still fails (missing ARCore, old Play Services, non‑certified device).
 
-1. Install / update **Google Play Services for AR** from Play Store  
+1. Install / update **Google Play Services for AR**  
 2. Update **Chrome**  
-3. Site settings → allow **Camera** (and AR if shown)  
-4. Use **HTTPS** (Netlify) — plain `http://LAN_IP` cannot start WebXR AR  
-5. Hard refresh, retry **Enter AR** outdoors/indoors with good light  
+3. Allow **Camera** (+ AR if shown) for the site  
+4. Use **HTTPS**  
+5. Hard refresh; retry in good light  
 
-If it still fails, the phone may not be ARCore‑certified. Use **manual 15×12 → Continue** — that is a valid full FYP path (style → design → 3D / place).
+If it still fails, use **manual 15×12 → Continue** — valid full FYP demo path.
