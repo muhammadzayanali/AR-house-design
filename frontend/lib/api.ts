@@ -30,7 +30,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(normalizeApiPath(path), { ...init, headers });
+  const response = await fetch(resolveApiUrl(path), { ...init, headers });
   if (response.status === 204) return undefined as T;
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -61,6 +61,16 @@ function normalizeApiPath(path: string) {
   const [pathname, query] = path.split("?");
   const slashed = pathname.endsWith("/") ? pathname : `${pathname}/`;
   return query ? `${slashed}?${query}` : slashed;
+}
+
+/** Local Django when frontend is hosted on Netlify (browser → laptop LAN). */
+function resolveApiUrl(path: string) {
+  const normalized = normalizeApiPath(path);
+  if (!normalized.startsWith("/api/") && !normalized.startsWith("/media/")) {
+    return normalized;
+  }
+  const origin = (process.env.NEXT_PUBLIC_API_ORIGIN || "").replace(/\/$/, "");
+  return origin ? `${origin}${normalized}` : normalized;
 }
 
 export async function loginRequest(username: string, password: string) {
