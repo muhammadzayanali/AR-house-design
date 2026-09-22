@@ -53,6 +53,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       );
     }
 
+    if (response.status === 502 || response.status === 503) {
+      throw new ApiError(
+        "API tunnel is down or overloaded (502/503). On the laptop keep Django + localtunnel running, then retry — or open http://192.168.2.105:3000 on the same Wi‑Fi.",
+        response.status,
+        text.slice(0, 200),
+      );
+    }
+
     let data: unknown = null;
     if (text) {
       try {

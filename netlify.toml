@@ -13,7 +13,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Server-side rewrite target (browser stays same-origin /api → no loca.lt CORS/511).
+  # Browser calls the HTTPS tunnel directly (Netlify→tunnel rewrites were flaky 502/503).
   # Keep tunnel alive: npx -y localtunnel --port 8000
-  # Leave NEXT_PUBLIC_API_ORIGIN unset so the phone never talks to *.loca.lt directly.
-  DJANGO_ORIGIN = "https://floppy-towns-invite.loca.lt"
+  # CORS already allows Bypass-Tunnel-Reminder for Android Chrome.
+  NEXT_PUBLIC_API_ORIGIN = "https://late-zebras-end.loca.lt"
