@@ -1,0 +1,13 @@
+# Netlify — deploy frontend only (branch: devel).
+# Base app lives in /frontend. Django runs on your laptop.
+# See docs/NETLIFY_LOCAL_BACKEND.md
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"
