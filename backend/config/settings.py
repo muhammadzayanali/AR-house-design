@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -89,6 +90,10 @@ APPEND_SLASH = True
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
+# Needed when the browser calls *.loca.lt with Bypass-Tunnel-Reminder.
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "bypass-tunnel-reminder",
+]
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

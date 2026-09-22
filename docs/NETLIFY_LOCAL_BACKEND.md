@@ -6,47 +6,35 @@
 - **Backend** → your laptop (`python manage.py runserver 0.0.0.0:8000`)
 - **Secrets** (`backend/.env`, `HF_TOKEN`, `DJANGO_SECRET_KEY`) stay **only on your machine**
 
-Netlify **cannot** reach `127.0.0.1` on your laptop. The browser must call Django on your **LAN IP**.
+## How API calls work on Netlify
+
+The phone browser calls **same-origin** `/api/...` on your Netlify site.
+Next.js rewrites those requests **server-side** to your HTTPS tunnel (`DJANGO_ORIGIN`).
+
+That avoids:
+
+- mixed content (HTTPS page → `http://LAN`)
+- localtunnel browser interstitial (`511 Tunnel website ahead`)
+- CORS failures from `Bypass-Tunnel-Reminder`
 
 ## 1. Keep secrets local
 
-Already gitignored:
+Already gitignored: `backend/.env`, `frontend/.env.local`, `.env*`.
 
-- `backend/.env`
-- `frontend/.env.local`
-- `.env*`
-
-Only commit `backend/.env.example` / `frontend/.env.example` (no real tokens).
-
-## 2. Run Django on LAN
-
-```bash
-cd backend
-../.venv/bin/python manage.py runserver 0.0.0.0:8000
-```
-
-Find your Mac IP (e.g. `192.168.1.140`).
-
-## 3. Netlify + local Django (HTTPS tunnel required)
-
-Browsers **block** Netlify HTTPS → `http://192.168.x.x:8000` (mixed content → “Failed to fetch”).
-
-Use an HTTPS tunnel to Django:
+## 2. Run Django + tunnel
 
 ```bash
 # Terminal A — Django
 cd backend && ../.venv/bin/python manage.py runserver 0.0.0.0:8000
 
-# Terminal B — tunnel
+# Terminal B — HTTPS tunnel
 npx -y localtunnel --port 8000
 # → prints https://something.loca.lt
 ```
 
-Put that URL in `netlify.toml` / `frontend/.env.production` as `NEXT_PUBLIC_API_ORIGIN`, push `devel`, redeploy Netlify.
+Put that URL in `netlify.toml` / `frontend/.env.production` as **`DJANGO_ORIGIN`** (not `NEXT_PUBLIC_API_ORIGIN`), push `devel`, redeploy Netlify.
 
-**Quick phone demo without Netlify:** open `http://YOUR_LAN_IP:3000` (local Next) — no mixed content.
-
-## 4. Netlify build settings
+## 3. Netlify build settings
 
 | Field | Value |
 |-------|--------|
@@ -55,17 +43,18 @@ Put that URL in `netlify.toml` / `frontend/.env.production` as `NEXT_PUBLIC_API_
 | Build command | `npm run build` |
 | Publish directory | **empty** or `.next` — **never** `frontend` |
 
-If publish = base (`frontend`), `@netlify/plugin-nextjs` fails with:
-`Your publish directory cannot be the same as the base directory`
+## 4. Reliable phone demo (no Netlify)
 
-## 5. Phone / demo
+Same Wi‑Fi as the laptop:
 
-1. Phone and laptop on **same Wi‑Fi**
-2. Open the Netlify HTTPS URL
-3. API calls go to `http://YOUR_LAN_IP:8000`
+```text
+http://YOUR_LAN_IP:3000
+```
 
-If API fails: check firewall, Django running on `0.0.0.0:8000`, and IP matches `NEXT_PUBLIC_API_ORIGIN`.
+Local Next rewrites `/api` → `http://127.0.0.1:8000`. No tunnel needed.
 
-## 6. Local full-stack (no Netlify)
+## 5. If Android still says “Failed to reach the API”
 
-Leave `NEXT_PUBLIC_API_ORIGIN` unset. Next rewrites `/api` → `http://127.0.0.1:8000`.
+1. Django + localtunnel still running on the laptop
+2. Netlify redeployed after the `DJANGO_ORIGIN` change
+3. Or skip Netlify and open `http://YOUR_LAN_IP:3000`

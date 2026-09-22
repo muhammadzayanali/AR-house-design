@@ -13,6 +13,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # HTTPS tunnel to local Django (Netlify HTTPS cannot call http://LAN).
+  # Server-side rewrite target (browser stays same-origin /api → no loca.lt CORS/511).
   # Keep tunnel alive: npx -y localtunnel --port 8000
-  NEXT_PUBLIC_API_ORIGIN = "https://floppy-towns-invite.loca.lt"
+  # Leave NEXT_PUBLIC_API_ORIGIN unset so the phone never talks to *.loca.lt directly.
+  DJANGO_ORIGIN = "https://floppy-towns-invite.loca.lt"

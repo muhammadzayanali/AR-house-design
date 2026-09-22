@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     "localhost",
     "192.168.1.140",
     "192.168.2.103",
+    "192.168.2.105",
   ],
   async rewrites() {
     return [
