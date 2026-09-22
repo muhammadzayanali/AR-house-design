@@ -27,17 +27,24 @@ cd backend
 
 Find your Mac IP (e.g. `192.168.1.140`).
 
-## 3. Netlify env (baked in `netlify.toml` + `frontend/.env.production`)
+## 3. Netlify + local Django (HTTPS tunnel required)
 
-Current LAN API base:
+Browsers **block** Netlify HTTPS → `http://192.168.x.x:8000` (mixed content → “Failed to fetch”).
 
-```text
-NEXT_PUBLIC_API_ORIGIN=http://192.168.2.105:8000
+Use an HTTPS tunnel to Django:
+
+```bash
+# Terminal A — Django
+cd backend && ../.venv/bin/python manage.py runserver 0.0.0.0:8000
+
+# Terminal B — tunnel
+npx -y localtunnel --port 8000
+# → prints https://something.loca.lt
 ```
 
-If your Mac IP changes, update both files and push `devel` again (or set the same var in Netlify UI).
+Put that URL in `netlify.toml` / `frontend/.env.production` as `NEXT_PUBLIC_API_ORIGIN`, push `devel`, redeploy Netlify.
 
-**Mixed content note:** Netlify is HTTPS; local Django is HTTP. Some browsers block that. Fix: same Wi‑Fi + allow “insecure content” for the site, or use a Cloudflare/ngrok HTTPS tunnel to Django instead.
+**Quick phone demo without Netlify:** open `http://YOUR_LAN_IP:3000` (local Next) — no mixed content.
 
 ## 4. Netlify build settings
 

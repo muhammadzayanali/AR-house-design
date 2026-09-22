@@ -13,5 +13,6 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Browser calls local Django on your laptop (same Wi‑Fi). Keep Django: runserver 0.0.0.0:8000
-  NEXT_PUBLIC_API_ORIGIN = "http://192.168.2.105:8000"
+  # HTTPS tunnel to local Django (Netlify HTTPS cannot call http://LAN).
+  # Keep tunnel alive: npx -y localtunnel --port 8000
+  NEXT_PUBLIC_API_ORIGIN = "https://floppy-towns-invite.loca.lt"
