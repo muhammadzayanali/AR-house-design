@@ -1,10 +1,12 @@
-# Netlify — deploy frontend only (branch: devel).
-# Base app lives in /frontend. Django runs on your laptop.
-# See docs/NETLIFY_LOCAL_BACKEND.md
+# Netlify — frontend only (Django stays local).
+# IMPORTANT: In Netlify UI → Build settings → Publish directory = leave EMPTY
+# or set to ".next". Do NOT set it to "frontend" (same as base).
 
 [build]
   base = "frontend"
   command = "npm run build"
+  # Relative to base directory. Must NOT equal the base folder itself.
+  publish = ".next"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
