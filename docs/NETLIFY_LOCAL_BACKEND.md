@@ -19,7 +19,14 @@ npx -y localtunnel --port 8000
 
 Set `NEXT_PUBLIC_API_ORIGIN` in `netlify.toml` / `frontend/.env.production` to that tunnel URL, push `devel`, redeploy.
 
-Phone browser calls the tunnel **directly** (CORS allows `Bypass-Tunnel-Reminder`). Do **not** rely on Netlify rewriting `/api` to the tunnel — that caused 502/503.
+Phone browser calls the tunnel **directly** for `/api` (CORS allows `Bypass-Tunnel-Reminder`). Do **not** rely on Netlify rewriting `/api` to the tunnel — that caused 502/503.
+
+## Screenshots on Netlify
+
+Project previews live on **laptop Django** (`backend/media/`). The dashboard uses same-origin `/api/media-proxy/...`, which fetches the tunnel with `Bypass-Tunnel-Reminder` (a plain `<img src="*.loca.lt">` hits the 511 reminder page and shows a broken image).
+
+Also set `DJANGO_ORIGIN` to the same tunnel URL (used by the media proxy). Keep Django + localtunnel running while viewing Netlify projects.
+
 
 ## Reliable demo without Netlify
 

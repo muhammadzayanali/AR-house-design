@@ -114,14 +114,39 @@ function normalizeApiPath(path: string) {
   return query ? `${slashed}?${query}` : slashed;
 }
 
-/** Local Django when frontend is hosted on Netlify (browser → laptop LAN). */
-function resolveApiUrl(path: string) {
+/** Local Django when frontend is hosted on Netlify (browser → HTTPS tunnel). */
+export function resolveApiUrl(path: string) {
   const normalized = normalizeApiPath(path);
   if (!normalized.startsWith("/api/") && !normalized.startsWith("/media/")) {
     return normalized;
   }
   const origin = (process.env.NEXT_PUBLIC_API_ORIGIN || "").replace(/\/$/, "");
   return origin ? `${origin}${normalized}` : normalized;
+}
+
+/** Screenshots / media from Django (often relative `/media/...`). */
+export function resolveMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  let pathname = url;
+  if (/^https?:\/\//i.test(url)) {
+    try {
+      pathname = new URL(url).pathname;
+    } catch {
+      return url;
+    }
+  }
+  if (!pathname.startsWith("/")) pathname = `/${pathname}`;
+
+  const origin = (process.env.NEXT_PUBLIC_API_ORIGIN || "").replace(/\/$/, "");
+
+  // localtunnel interstitial blocks bare <img> GETs (no Bypass header).
+  // Same-origin Next proxy adds the header server-side.
+  if (origin && /loca\.lt/i.test(origin) && pathname.startsWith("/media/")) {
+    return `/api/media-proxy/${pathname.slice("/media/".length)}`;
+  }
+
+  return resolveApiUrl(pathname);
 }
 
 export async function loginRequest(username: string, password: string) {

@@ -13,10 +13,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Browser calls the HTTPS tunnel directly (Netlify→tunnel rewrites were flaky 502/503).
-  # Keep tunnel alive: npx -y localtunnel --port 8000
-  # CORS already allows Bypass-Tunnel-Reminder for Android Chrome.
+  # Browser API → tunnel. Media <img> uses /api/media-proxy (same origin) → tunnel.
   NEXT_PUBLIC_API_ORIGIN = "https://late-zebras-end.loca.lt"
+  DJANGO_ORIGIN = "https://late-zebras-end.loca.lt"
 
 # Allow WebXR / camera for immersive AR on Android Chrome.
 [[headers]]

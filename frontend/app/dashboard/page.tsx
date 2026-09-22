@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import { api } from "@/lib/api";
+import { api, resolveMediaUrl } from "@/lib/api";
 import type { HealthResponse, Project } from "@/lib/types";
 import { formatPkr } from "@/lib/units/land";
 
@@ -109,12 +108,11 @@ export default function DashboardPage() {
               <Link href={`/projects/${project.id}`} className="block">
                 <div className="relative h-36 bg-ink">
                   {project.screenshot_url ? (
-                    <Image
-                      src={project.screenshot_url}
+                    // eslint-disable-next-line @next/next/no-img-element -- tunnel/proxy URLs; not next/image remote config
+                    <img
+                      src={resolveMediaUrl(project.screenshot_url) ?? undefined}
                       alt=""
-                      fill
-                      className="object-cover"
-                      unoptimized
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-stone">
