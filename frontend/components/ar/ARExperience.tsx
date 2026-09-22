@@ -171,15 +171,22 @@ export default function ARExperience() {
       await enterAndroidAR();
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
-      const unsupported =
-        /session configuration is not supported|not supported|WebXR not supported/i.test(
-          raw,
-        );
-      setError(
-        unsupported
-          ? "AR could not start on this phone. Use manual length × width below (works for the full FYP demo), or update Chrome + “Google Play Services for AR”, then retry Enter AR."
-          : raw || "Could not start AR",
+      const configUnsupported =
+        /session configuration is not supported/i.test(raw);
+      const noWebXr = /WebXR not supported|Immersive AR is not supported/i.test(
+        raw,
       );
+      if (configUnsupported || noWebXr) {
+        setError(
+          "AR could not start on this phone. Your 15×12 manual values already work — tap Continue to style choice. Or update Chrome + “Google Play Services for AR”, then retry Enter AR.",
+        );
+      } else if (/not connected to three\.js|canvas is not yet loaded/i.test(raw)) {
+        setError(
+          "3D view was still loading. Wait 2 seconds and tap Enter AR again.",
+        );
+      } else {
+        setError(raw || "Could not start AR");
+      }
     }
   }
 
