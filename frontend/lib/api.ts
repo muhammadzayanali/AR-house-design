@@ -30,11 +30,41 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+
+  const url = resolveApiUrl(path);
+  // localtunnel interstitial returns 511 HTML unless this header is set
+  if (/loca\.lt/i.test(url)) {
+    headers.set("Bypass-Tunnel-Reminder", "true");
+  }
+
   try {
-    const response = await fetch(resolveApiUrl(path), { ...init, headers });
+    const response = await fetch(url, { ...init, headers });
     if (response.status === 204) return undefined as T;
     const text = await response.text();
-    const data = text ? JSON.parse(text) : null;
+
+    if (
+      response.status === 511 ||
+      /tunnel website ahead|network authentication required/i.test(text)
+    ) {
+      throw new ApiError(
+        "API tunnel blocked (loca.lt reminder page). Redeploy after the Bypass-Tunnel-Reminder fix, or open http://YOUR_LAN_IP:3000 on the same Wi‑Fi instead of Netlify.",
+        511,
+        null,
+      );
+    }
+
+    let data: unknown = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new ApiError(
+          `API returned non-JSON (${response.status}). Is the Django tunnel still running?`,
+          response.status,
+          text.slice(0, 200),
+        );
+      }
+    }
     if (!response.ok) {
       throw new ApiError(formatApiError(data, response.status), response.status, data);
     }
@@ -44,7 +74,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const msg = err instanceof Error ? err.message : String(err);
     if (/failed to fetch|networkerror|load failed/i.test(msg)) {
       throw new ApiError(
-        "Failed to reach the API. Keep Django running on your laptop (0.0.0.0:8000), use the same Wi‑Fi, and in Chrome allow insecure content for this Netlify site (HTTPS → HTTP LAN).",
+        "Failed to reach the API. Keep Django + the HTTPS tunnel running on your laptop, or use http://YOUR_LAN_IP:3000 on the same Wi‑Fi.",
         0,
         null,
       );
