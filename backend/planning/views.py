@@ -214,6 +214,7 @@ class DesignMatchView(APIView):
 
     def get(self, request):
         from .feasibility import filter_designs, preliminary_space_estimate
+        from .planning_engine import build_preliminary_plan
 
         style = request.query_params.get("style")
         plot_raw = request.query_params.get("plot_area")
@@ -268,6 +269,7 @@ class DesignMatchView(APIView):
                 rows.append(data)
             return rows
 
+        plan = build_preliminary_plan(plot)
         payload = {
             "plot_area_sqm": plot,
             "land_units": units,
@@ -276,6 +278,7 @@ class DesignMatchView(APIView):
             "exact": enrich(result["exact"], True),
             "nearby": enrich(result["nearby"], False),
             "preliminary_space": preliminary_space_estimate(plot),
+            "planning_summary": plan,
             "message": None,
         }
         if result["match_kind"] == "nearby" and style:
@@ -332,6 +335,7 @@ class SpaceEstimateView(APIView):
 
     def post(self, request):
         from .feasibility import preliminary_space_estimate
+        from .planning_engine import build_preliminary_plan
 
         try:
             plot = float(request.data.get("land_size_sqm"))
@@ -345,12 +349,58 @@ class SpaceEstimateView(APIView):
                 {"detail": "land_size_sqm must be > 0"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        plan = build_preliminary_plan(plot)
         return Response(
             {
                 "land_units": sqm_to_units(plot),
                 "preliminary_space": preliminary_space_estimate(plot),
+                "planning_summary": plan,
             }
         )
+
+
+class PlanningSummaryView(APIView):
+    """Structured preliminary or design-authoritative planning summary."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .models import HouseDesign
+        from .planning_engine import build_preliminary_plan, design_planning_overlay
+
+        try:
+            plot = float(request.data.get("land_size_sqm"))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "land_size_sqm must be a number"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if plot <= 0:
+            return Response(
+                {"detail": "land_size_sqm must be > 0"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        house_id = request.data.get("house_id")
+        length = request.data.get("plot_length_m")
+        width = request.data.get("plot_width_m")
+        length_f = float(length) if length not in (None, "") else None
+        width_f = float(width) if width not in (None, "") else None
+
+        if house_id:
+            try:
+                house = HouseDesign.objects.get(pk=house_id, active=True)
+            except HouseDesign.DoesNotExist:
+                return Response(
+                    {"detail": "House design not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            from .feasibility import compute_feasibility
+
+            feas = compute_feasibility(plot, house, length_f, width_f)
+            return Response(design_planning_overlay(house, plot, feas))
+
+        return Response(build_preliminary_plan(plot))
 
 
 class RecommendView(APIView):

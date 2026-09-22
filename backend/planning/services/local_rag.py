@@ -36,10 +36,29 @@ _INTENT_PATTERNS: List[Tuple[str, Sequence[str]]] = [
             "façade",
         ),
     ),
-    ("cost", ("cost", "budget", "price", "pkr", "expensive", "cheap", "estimate")),
+    ("cost", ("cost", "budget", "price", "pkr", "expensive", "cheap", "estimate", "construction", "lahore")),
     ("why", ("why", "recommend", "chosen", "selected", "match", "picked")),
-    ("feasibility", ("coverage", "footprint", "remaining", "feasib", "fit", "open space")),
-    ("rooms", ("bedroom", "bathroom", "kitchen", "living", "dining", "room", "programme", "program")),
+    ("feasibility", ("coverage", "footprint", "remaining", "feasib", "fit", "open space", "covered")),
+    (
+        "rooms",
+        (
+            "bedroom",
+            "bathroom",
+            "kitchen",
+            "living",
+            "dining",
+            "drawing",
+            "powder",
+            "master",
+            "parking",
+            "room",
+            "programme",
+            "program",
+            "size",
+            "ft",
+            "dimension",
+        ),
+    ),
     ("style", ("style", "italian", "modern", "cottage", "american", "luxury", "traditional", "mediterranean")),
     ("3d", ("3d", "model", "glb", "procedural", "viewer", "ar", "mesh")),
     ("units", ("marla", "kanal", "acre", "sqm", "square", "plot size", "land size")),
@@ -341,11 +360,31 @@ def synthesize_answer(
         )
 
     if intent == "cost":
+        cost = facts.get("cost_estimate") or {}
+        if cost.get("min") and cost.get("max"):
+            return (
+                "Preliminary Lahore reference construction estimate for ~{cov} m² "
+                "covered area (~{sqft} sq ft) at about PKR {rate}/sq ft: "
+                "PKR {lo:,.0f}–{hi:,.0f} ({quality}). "
+                "Catalog list price for {name} is separately {catalog}. "
+                "Both are preliminary estimates — not quotations. "
+                "{disclaimer}"
+                .format(
+                    cov=cost.get("covered_area_m2") or "—",
+                    sqft=cost.get("covered_area_sqft") or "—",
+                    rate=cost.get("reference_rate_pkr_per_sqft") or "—",
+                    lo=float(cost["min"]),
+                    hi=float(cost["max"]),
+                    quality=cost.get("quality") or "standard",
+                    name=name,
+                    catalog=_fmt_cost(facts),
+                    disclaimer=cost.get("disclaimer")
+                    or "Costs vary with city, materials, labour and design complexity.",
+                )
+            )
         return (
             "For {name}, the catalog cost range is {cost}. "
-            "That figure is a preliminary planning estimate only — not a quotation, BOQ, or bid. "
-            "Actual cost depends on structure, finishes, site works, and market rates. "
-            "Use it to compare designs, not to approve a budget."
+            "That figure is a preliminary planning estimate only — not a quotation, BOQ, or bid."
             .format(name=name, cost=_fmt_cost(facts))
         )
 
@@ -365,19 +404,37 @@ def synthesize_answer(
         )
 
     if intent == "rooms":
+        sizes = facts.get("room_sizes") or {}
+        master = sizes.get("master_bedroom") or {}
+        size_line = ""
+        if master.get("length_ft") and master.get("width_ft"):
+            size_line = (
+                " Approximate master bedroom {l}×{w} ft."
+                .format(l=master["length_ft"], w=master["width_ft"])
+            )
+        park_min = rooms.get("parking_spaces_min", rooms.get("parking_spaces", "—"))
+        park_max = rooms.get("parking_spaces_max", park_min)
         return (
-            "{name} programme: {beds} bedrooms, {baths} bathrooms, {floors} floor(s), "
-            "{living} living, {dining} dining, {kitchen} kitchen, parking spaces={park}. "
-            "These come from the HouseDesign catalog for this project — not from camera analysis."
+            "{name} programme: {beds} bedrooms, {baths} bathrooms, "
+            "{powder} powder, {kitchen} kitchen, {dining} dining, "
+            "{drawing} drawing, {family} family/living, "
+            "parking {pmin}–{pmax} (geometry-dependent), {floors} floor(s)."
+            "{size_line} "
+            "Counts come from the HouseDesign catalog / planning engine — not from camera analysis. "
+            "If a detail is missing from project data, it is not available."
             .format(
                 name=name,
                 beds=rooms.get("bedrooms", facts.get("bedrooms") or "—"),
                 baths=rooms.get("bathrooms", facts.get("bathrooms") or "—"),
-                floors=rooms.get("floors", facts.get("floors") or "—"),
-                living=rooms.get("living_rooms", "—"),
-                dining=rooms.get("dining_rooms", "—"),
+                powder=rooms.get("powder_rooms", 0),
                 kitchen=rooms.get("kitchens", "—"),
-                park=rooms.get("parking_spaces", "—"),
+                dining=rooms.get("dining_rooms", "—"),
+                drawing=rooms.get("drawing_rooms", 0),
+                family=rooms.get("family_rooms") or rooms.get("family_lounges") or rooms.get("living_rooms") or "—",
+                pmin=park_min,
+                pmax=park_max,
+                floors=rooms.get("floors", facts.get("floors") or "—"),
+                size_line=size_line,
             )
         )
 

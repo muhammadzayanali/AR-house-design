@@ -271,21 +271,66 @@ Fit check for 15 × 12 plot vs 10 × 9 house: \(10\le15\) and \(9\le12\) → **f
 
 ---
 
-## 6. Preliminary space estimate (before picking a design)
+## 6. Preliminary architectural planning engine
 
-Area bands (examples):
+**Source of truth:** `backend/planning/planning_engine.py` + `cost_estimate.py`  
+**API:** `POST /api/space-estimate/`, `POST /api/planning/summary/`  
+**UI:** `frontend/components/planning/PlanningResultPanel.tsx`
 
-| Plot m² | Suggested bedrooms (heuristic) |
-|---------|--------------------------------|
-| 0–100 | 1–2 |
-| 100–150 | 2–3 |
-| **150–220** | **3–4** ← 180 m² lands here |
-| 220–350 | 4–5 |
-| 350+ | 5+ |
+Pipeline (deterministic — **no LLM**):
 
-After a catalog design is selected, that design’s **room programme** is authoritative.
+```text
+Plot area (m²)
+  → unit conversions (sq ft / Marla / Kanal / Acre)
+  → planning band
+  → recommended covered footprint + coverage %
+  → room programme + approximate room sizes (ft)
+  → parking range (geometry-conditional)
+  → Lahore construction cost estimate (covered × rate)
+  → HouseDesign match (catalog becomes authoritative)
+  → feasibility (footprint / remaining / coverage)
+```
+
+### Planning bands (conceptual, not legal classifications)
+
+| Plot area | Band id | Baseline programme |
+|-----------|---------|--------------------|
+| 0–100 m² (exclusive upper) | `0_100` | 1 bed compact |
+| 100–150 | `100_150` | 2 bed small family |
+| **150–220** | **`150_220`** | **3 bed / 3 bath / powder — 180 m² demo** |
+| 220–350 | `220_350` | 4 bed villa |
+| 350–500 | `350_500` | 4–5 bed large villa |
+| 500+ | `500_plus` | 5+ scalable luxury |
+
+Band edges use **inclusive lower / exclusive upper** (except the open-ended last band).
+
+### Covered area vs plot area
+
+Never treat plot area as covered area. For every plan expose:
+
+- Plot area  
+- Covered footprint (preliminary target or HouseDesign footprint)  
+- Coverage %  
+- Floors  
+- Remaining / open area  
+
+**180 m² Italian Compact Villa demo:** footprint **90 m²**, coverage **50%**, remaining **90 m²**, 2 floors.
+
+### Construction cost (Lahore reference)
+
+`cost_estimate.py` interpolates PKR/sq ft from Zameen Lahore anchors (Sept 2026: 3–10 Marla, 1 Kanal) and multiplies by **covered** sq ft (±12% range). Labeled **Lahore reference benchmark / preliminary** — not a contractor quotation. Quality multipliers: standard / premium / luxury.
+
+### HouseDesign authority
+
+Preliminary band suggests a programme; once a catalog design is selected, that design’s bedrooms, baths, powder, drawing, room_sizes JSON, and footprint are **authoritative**.
+
+### AI grounding
+
+`grounded_context.py` classifies FACT / ESTIMATE / LIMITATION (includes room sizes + Lahore cost).  
+`ai_validator.py` rejects invented bedrooms, baths, floors, footprint, master size, setbacks/FAR, and cost numbers far from the estimate.
 
 ---
+
 
 ## 7. 3D visualization & AR placement
 
@@ -442,10 +487,13 @@ cd backend
 | AR area math (frontend) | `frontend/lib/geometry/area.ts` |
 | Area math (backend) | `backend/planning/geometry.py` |
 | Units | `backend/planning/units.py` |
+| Planning bands / room sizes | `backend/planning/planning_engine.py` |
+| Lahore cost estimator | `backend/planning/cost_estimate.py` |
 | Recommendation | `backend/planning/recommendation.py` |
 | Feasibility | `backend/planning/feasibility.py` |
 | Seed catalog | `backend/planning/management/commands/seed_houses.py` |
 | Procedural 3D | `frontend/components/architecture/ArchitecturalHouse.tsx` |
+| Planning result UI | `frontend/components/planning/PlanningResultPanel.tsx` |
 | Local RAG | `backend/planning/services/local_rag.py` |
 | Grounded FACT/ESTIMATE | `backend/planning/grounded_context.py` |
 | AI validator | `backend/planning/services/ai_validator.py` |
@@ -461,14 +509,14 @@ Related docs: [ARCHITECTURE.md](./ARCHITECTURE.md) · [AR_SETUP.md](./AR_SETUP.m
 Every consultant / report context is built as:
 
 ```text
-facts      → plot, design, rooms, footprint, coverage (Django engines + HouseDesign)
-estimates  → catalog cost min/max, preliminary space bands
-limitations→ survey / bylaw / approval / photorealism disclaimers
+facts      → plot, design, rooms, room sizes, footprint, coverage (Django engines + HouseDesign)
+estimates  → Lahore covered-area cost range, catalog cost min/max, preliminary bands
+limitations→ survey / bylaw / approval / photorealism / parking-geometry disclaimers
 ```
 
 Code: `planning/grounded_context.py` → attached on `project_facts()` and `/ask/` as `grounded`.
 
-Optional Hugging Face polish is validated by `ai_validator.py`. Unsupported regulation claims or contradictory room counts → **discard HF text**, keep local RAG.
+Optional Hugging Face polish is validated by `ai_validator.py`. Unsupported regulation claims, contradictory room counts/floors/footprint/master size, or invented costs → **discard HF text**, keep local RAG.
 
 ---
 
@@ -476,7 +524,7 @@ Optional Hugging Face polish is validated by `ai_validator.py`. Unsupported regu
 
 | Layer | What it proves | Command / doc |
 |-------|----------------|---------------|
-| **Django unit/API** | Math, units, match, feasibility, RAG, grounding, ownership | `python manage.py test planning` (**41** tests) |
+| **Django unit/API** | Math, units, bands, cost, match, feasibility, RAG, grounding, ownership | `python manage.py test planning` |
 | **Playwright** | Browser/API critical path; **not** physical AR | `cd frontend && npm run test:e2e` |
 | **Physical AR** | WebXR on Android device | [AR_TESTING.md](./AR_TESTING.md) manual sheet |
 

@@ -12,12 +12,16 @@ from .units import sqm_to_units
 
 
 def project_facts(project) -> Dict[str, Any]:
+    from .planning_engine import design_planning_overlay
+    from .units import sqm_to_sqft
+
     house = project.selected_house
     units = sqm_to_units(project.land_size_sqm)
     facts: Dict[str, Any] = {
         "project_id": project.id,
         "project_name": project.name or "",
         "land_size_sqm": round(float(project.land_size_sqm), 2),
+        "land_size_sqft": units.get("sqft") or sqm_to_sqft(project.land_size_sqm),
         "plot_length_m": project.plot_length_m,
         "plot_width_m": project.plot_width_m,
         "measurement_type": project.measurement_type,
@@ -31,6 +35,13 @@ def project_facts(project) -> Dict[str, Any]:
         "preliminary_space": preliminary_space_estimate(project.land_size_sqm),
     }
     if house:
+        feas = project.feasibility_snapshot or compute_feasibility(
+            project.land_size_sqm,
+            house,
+            project.plot_length_m,
+            project.plot_width_m,
+        )
+        overlay = design_planning_overlay(house, project.land_size_sqm, feas)
         facts.update(
             {
                 "house_name": house.name,
@@ -47,27 +58,30 @@ def project_facts(project) -> Dict[str, Any]:
                 "building_width_m": house.building_width_m,
                 "building_depth_m": house.building_depth_m,
                 "room_program": design_room_program(house),
+                "room_sizes": overlay.get("room_sizes"),
+                "planning": overlay.get("planning"),
+                "cost_estimate": overlay.get("cost_estimate"),
                 "plot_range_min": house.effective_min_plot,
                 "plot_range_max": house.effective_max_plot,
                 "model_type": house.model_type,
+                "feasibility": feas,
             }
         )
-        facts["feasibility"] = project.feasibility_snapshot or compute_feasibility(
-            project.land_size_sqm,
-            house,
-            project.plot_length_m,
-            project.plot_width_m,
-        )
     else:
+        prelim = facts["preliminary_space"]
         facts.update(
             {
                 "house_name": None,
                 "house_style": None,
-                "bedrooms": None,
-                "bathrooms": None,
-                "floors": None,
+                "bedrooms": (prelim.get("room_program") or {}).get("bedrooms"),
+                "bathrooms": (prelim.get("room_program") or {}).get("bathrooms"),
+                "floors": (prelim.get("planning") or {}).get("recommended_floors"),
                 "parking": None,
                 "estimated_cost_pkr": None,
+                "room_program": prelim.get("room_program"),
+                "room_sizes": prelim.get("room_sizes"),
+                "planning": prelim.get("planning"),
+                "cost_estimate": prelim.get("cost_estimate"),
             }
         )
     facts["grounded"] = build_grounded_context(facts)

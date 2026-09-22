@@ -14,8 +14,10 @@ LIMITATIONS: List[str] = [
     "Feasibility checks footprint fit and coverage only — not setbacks, FAR/FSI, or full bylaws.",
     "The system does not verify building-code compliance or legal approval.",
     "Catalog cost values are preliminary estimates, not quotations or BOQs.",
+    "Construction cost uses a Lahore reference benchmark applied to covered area — not a contractor quotation.",
     "Procedural 3D is real-time architectural visualization, not photoreal CGI.",
     "AI/consultant text explains stored facts; it does not recalculate measurements.",
+    "Parking capacity depends on plot geometry and is conditional, not guaranteed.",
 ]
 
 
@@ -24,9 +26,13 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
     feas = facts.get("feasibility") or {}
     rooms = facts.get("room_program") or {}
     prelim = facts.get("preliminary_space") or {}
+    planning = facts.get("planning") or prelim.get("planning") or {}
+    room_sizes = facts.get("room_sizes") or prelim.get("room_sizes") or {}
+    cost = facts.get("cost_estimate") or prelim.get("cost_estimate") or {}
 
     verified_facts: Dict[str, Any] = {
         "plot_area_sqm": facts.get("land_size_sqm"),
+        "plot_area_sqft": facts.get("land_size_sqft") or (prelim.get("plot") or {}).get("area_sqft"),
         "plot_marla": facts.get("land_size_marla"),
         "plot_kanal": facts.get("land_size_kanal"),
         "plot_acre": facts.get("land_size_acre"),
@@ -36,43 +42,66 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
         "selected_style": facts.get("preferred_style") or facts.get("house_style"),
         "selected_design": facts.get("house_name"),
         "building_footprint_sqm": feas.get("building_footprint_sqm")
-        or facts.get("building_footprint_sqm"),
+        or facts.get("building_footprint_sqm")
+        or planning.get("covered_area_m2"),
         "building_width_m": facts.get("building_width_m") or feas.get("building_width_m"),
         "building_depth_m": facts.get("building_depth_m") or feas.get("building_depth_m"),
-        "floors": rooms.get("floors", facts.get("floors")),
+        "floors": rooms.get("floors", facts.get("floors") or planning.get("recommended_floors")),
         "bedrooms": rooms.get("bedrooms", facts.get("bedrooms")),
         "bathrooms": rooms.get("bathrooms", facts.get("bathrooms")),
+        "powder_rooms": rooms.get("powder_rooms"),
         "living_rooms": rooms.get("living_rooms"),
-        "family_rooms": rooms.get("family_rooms"),
+        "family_rooms": rooms.get("family_rooms") or rooms.get("family_lounges"),
         "dining_rooms": rooms.get("dining_rooms"),
+        "drawing_rooms": rooms.get("drawing_rooms"),
         "kitchens": rooms.get("kitchens"),
+        "dirty_kitchens": rooms.get("dirty_kitchens"),
+        "study_rooms": rooms.get("study_rooms"),
         "parking_spaces": rooms.get("parking_spaces"),
+        "parking_spaces_min": rooms.get("parking_spaces_min"),
+        "parking_spaces_max": rooms.get("parking_spaces_max"),
         "balconies": rooms.get("balconies"),
         "terraces": rooms.get("terraces"),
         "garage": rooms.get("garage"),
         "pool": rooms.get("pool"),
         "garden": rooms.get("garden"),
-        "remaining_area_sqm": feas.get("remaining_area_sqm"),
-        "coverage_percent": feas.get("ground_coverage_percent"),
+        "remaining_area_sqm": feas.get("remaining_area_sqm") or planning.get("remaining_area_m2"),
+        "coverage_percent": feas.get("ground_coverage_percent") or planning.get("coverage_percent"),
         "feasibility_status": feas.get("status"),
         "recommendation_reason": facts.get("recommendation_reason"),
         "model_type": facts.get("model_type"),
         "plot_range_min_sqm": facts.get("plot_range_min"),
         "plot_range_max_sqm": facts.get("plot_range_max"),
+        "planning_band": planning.get("band"),
+        "room_sizes": room_sizes,
     }
 
     estimates: Dict[str, Any] = {
-        "cost_min": facts.get("estimated_cost_min"),
-        "cost_max": facts.get("estimated_cost_max"),
+        "cost_min": cost.get("min"),
+        "cost_max": cost.get("max"),
+        "cost_mid": cost.get("mid"),
         "cost_list_pkr": facts.get("estimated_cost_pkr"),
-        "currency": facts.get("currency") or "PKR",
+        "catalog_cost_min": facts.get("estimated_cost_min"),
+        "catalog_cost_max": facts.get("estimated_cost_max"),
+        "cost_reference_rate": cost.get("reference_rate_pkr_per_sqft"),
+        "cost_covered_sqft": cost.get("covered_area_sqft"),
+        "cost_source": cost.get("source") or "Lahore reference benchmark",
+        "currency": cost.get("currency") or facts.get("currency") or "PKR",
         "preliminary_space_bands": prelim.get("estimate"),
         "preliminary_space_disclaimer": prelim.get("disclaimer"),
-        "cost_disclaimer": (
-            "Cost figures are catalog preliminary estimates only — "
+        "planning_title": planning.get("title"),
+        "covered_area_m2_estimate": planning.get("covered_area_m2"),
+        "cost_disclaimer": cost.get("disclaimer")
+        or (
+            "Cost figures are preliminary Lahore reference estimates only — "
             "not a contractor quotation, BOQ, or market bid."
         ),
     }
+    # Fall back to catalog range only when Lahore estimate is absent
+    if estimates["cost_min"] is None:
+        estimates["cost_min"] = facts.get("estimated_cost_min")
+    if estimates["cost_max"] is None:
+        estimates["cost_max"] = facts.get("estimated_cost_max")
 
     return {
         "facts": verified_facts,
@@ -82,8 +111,9 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
             "project_id": facts.get("project_id"),
             "project_name": facts.get("project_name"),
             "source_of_truth": (
-                "Deterministic Django engines (units, recommendation, feasibility) "
-                "+ HouseDesign catalog. LLM must not alter facts."
+                "Deterministic Django engines (units, planning bands, recommendation, "
+                "feasibility, Lahore cost estimator) + HouseDesign catalog. "
+                "LLM must not alter facts."
             ),
         },
     }

@@ -17,6 +17,7 @@ import {
   DesignCatalog,
   StylePicker,
 } from "@/components/architecture/StylePicker";
+import { PlanningResultPanel } from "@/components/planning/PlanningResultPanel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/lib/api";
 import { areaSqmFromPoints } from "@/lib/geometry/area";
@@ -32,6 +33,8 @@ import type {
   Feasibility,
   HouseDesign,
   LandUnits,
+  PlanningSummary,
+  Preliminary,
   RecommendResponse,
   WorldPoint,
 } from "@/lib/types";
@@ -52,8 +55,6 @@ type Phase =
   | "detail"
   | "place"
   | "inspect";
-
-type Preliminary = { estimate?: Record<string, string>; disclaimer?: string };
 
 export default function ARExperience() {
   const router = useRouter();
@@ -77,6 +78,7 @@ export default function ARExperience() {
   const [feasibility, setFeasibility] = useState<Feasibility | null>(null);
   const [roomProgram, setRoomProgram] = useState<Record<string, number | boolean> | null>(null);
   const [preliminary, setPreliminary] = useState<Preliminary | null>(null);
+  const [planningSummary, setPlanningSummary] = useState<PlanningSummary | null>(null);
   const [landUnits, setLandUnits] = useState<LandUnits | null>(null);
 
   useEffect(() => {
@@ -224,14 +226,23 @@ export default function ARExperience() {
     try {
       const [stylesRes, estimateRes] = await Promise.all([
         api<{ styles: ArchStyleCard[] }>("/api/styles/"),
-        api<{ land_units: LandUnits; preliminary_space: Preliminary }>(
-          "/api/space-estimate/",
-          { method: "POST", body: JSON.stringify({ land_size_sqm: area }) },
-        ),
+        api<{
+          land_units: LandUnits;
+          preliminary_space: Preliminary;
+          planning_summary?: PlanningSummary;
+        }>("/api/space-estimate/", {
+          method: "POST",
+          body: JSON.stringify({ land_size_sqm: area }),
+        }),
       ]);
       setStyles(stylesRes.styles);
       setLandUnits(estimateRes.land_units);
       setPreliminary(estimateRes.preliminary_space);
+      setPlanningSummary(
+        estimateRes.planning_summary ||
+          (estimateRes.preliminary_space as PlanningSummary) ||
+          null,
+      );
       setPhase("style");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load styles");
@@ -284,12 +295,19 @@ export default function ARExperience() {
           body.plot_width_m = W;
         }
       }
-      const result = await api<{
-        house: HouseDesign;
-        room_program: Record<string, number | boolean>;
-        feasibility: Feasibility;
-        land_units: LandUnits;
-      }>("/api/feasibility/", { method: "POST", body: JSON.stringify(body) });
+      const [feasResult, planResult] = await Promise.all([
+        api<{
+          house: HouseDesign;
+          room_program: Record<string, number | boolean>;
+          feasibility: Feasibility;
+          land_units: LandUnits;
+        }>("/api/feasibility/", { method: "POST", body: JSON.stringify(body) }),
+        api<PlanningSummary>("/api/planning/summary/", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }).catch(() => null),
+      ]);
+      const result = feasResult;
       const reason =
         match?.message ||
         (match?.match_kind === "exact"
@@ -299,6 +317,7 @@ export default function ARExperience() {
       setFeasibility(result.feasibility);
       setRoomProgram(result.room_program);
       setLandUnits(result.land_units);
+      if (planResult) setPlanningSummary(planResult);
       setPhase(goPlace && sessionActive ? "place" : "detail");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Feasibility check failed");
@@ -403,6 +422,7 @@ export default function ARExperience() {
     setFeasibility(null);
     setRoomProgram(null);
     setPreliminary(null);
+    setPlanningSummary(null);
     setLandUnits(null);
     setPhase(sessionActive ? "measure" : "setup");
   }
@@ -429,6 +449,7 @@ export default function ARExperience() {
       roomProgram={roomProgram}
       styles={styles}
       preliminary={preliminary}
+      planningSummary={planningSummary}
       selectedStyle={selectedStyle}
       match={match}
       catalogDesigns={catalogDesigns}
@@ -534,6 +555,7 @@ function Hud(p: {
   roomProgram: Record<string, number | boolean> | null;
   styles: ArchStyleCard[];
   preliminary: Preliminary | null;
+  planningSummary: PlanningSummary | null;
   selectedStyle: string | null;
   match: DesignMatchResponse | null;
   catalogDesigns: HouseDesign[];
@@ -565,8 +587,13 @@ function Hud(p: {
 
   if (p.phase === "style") {
     return (
-      <div>
+      <div className="space-y-3">
         {err}
+        {p.planningSummary && (
+          <div className="mx-auto max-w-lg rounded-2xl bg-ink/95 p-3 text-paper ring-1 ring-white/10">
+            <PlanningResultPanel plan={p.planningSummary} variant="dark" />
+          </div>
+        )}
         <StylePicker
           units={p.units}
           styles={p.styles}
@@ -598,21 +625,32 @@ function Hud(p: {
 
   if ((p.phase === "detail" || p.phase === "inspect") && p.recommendation) {
     const house = p.recommendation.house;
-    const rooms = p.roomProgram || house.room_program || {};
-    const chips = [
-      ["Bedrooms", rooms.bedrooms ?? house.bedrooms],
-      ["Baths", rooms.bathrooms ?? house.bathrooms],
-      ["Living", rooms.living_rooms],
-      ["Dining", rooms.dining_rooms],
-      ["Kitchen", rooms.kitchens],
-      ["Parking", rooms.parking_spaces],
-      ["Floors", rooms.floors ?? house.floors],
-    ].filter(([, v]) => v !== undefined && v !== null && v !== false);
+    const plan: PlanningSummary =
+      p.planningSummary ||
+      ({
+        plot: {
+          area_m2: p.units.sqm,
+          area_sqft: p.units.sqft,
+          marla: p.units.marla,
+          display_label: p.units.display_label,
+        },
+        planning: {
+          title: house.name,
+          recommended_floors: house.floors,
+          covered_area_m2: p.feasibility?.building_footprint_sqm,
+          coverage_percent: p.feasibility?.ground_coverage_percent,
+          remaining_area_m2: p.feasibility?.remaining_area_sqm,
+          source: "house_design",
+        },
+        room_program: (p.roomProgram || house.room_program || {}) as PlanningSummary["room_program"],
+        room_sizes: house.room_sizes,
+        feasibility: p.feasibility || undefined,
+      } as PlanningSummary);
 
     return (
-      <div className="mx-auto max-w-md overflow-hidden rounded-2xl bg-ink/92 text-paper shadow-2xl ring-1 ring-white/12 backdrop-blur-md">
+      <div className="mx-auto max-w-md space-y-3 overflow-hidden rounded-2xl bg-ink/92 p-3 text-paper shadow-2xl ring-1 ring-white/12 backdrop-blur-md">
         {err}
-        <div className="flex items-start justify-between gap-3 px-4 pt-4">
+        <div className="flex items-start justify-between gap-3 px-1 pt-1">
           <div className="min-w-0">
             <p className="truncate font-serif text-xl tracking-tight">{house.name}</p>
             <p className="mt-0.5 text-xs text-stone">
@@ -625,64 +663,21 @@ function Hud(p: {
           </Link>
         </div>
 
-        <div className="mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1">
-          {chips.map(([label, value]) => (
-            <span
-              key={String(label)}
-              className="shrink-0 rounded-full bg-white/8 px-2.5 py-1 text-[11px] text-paper/90 ring-1 ring-white/10"
-            >
-              <span className="text-stone">{label} </span>
-              {String(value)}
-            </span>
-          ))}
-        </div>
+        <p className="px-1 text-[11px] leading-snug text-stone/85">{p.recommendation.reason}</p>
 
-        {p.feasibility && (
-          <div className="mx-4 mt-3 rounded-xl bg-white/5 px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] uppercase tracking-wide text-stone">Plot fit</p>
-              <span className="rounded-full bg-brass/15 px-2 py-0.5 text-[10px] text-brass">
-                {p.feasibility.status.replace(/_/g, " ")}
-              </span>
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-sm font-medium text-paper">
-                  {p.feasibility.building_footprint_sqm.toFixed(0)}
-                </p>
-                <p className="text-[10px] text-stone">m² build</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-paper">
-                  {p.feasibility.remaining_area_sqm.toFixed(0)}
-                </p>
-                <p className="text-[10px] text-stone">m² open</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-paper">
-                  {p.feasibility.ground_coverage_percent.toFixed(0)}%
-                </p>
-                <p className="text-[10px] text-stone">coverage</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <p className="mt-2 px-4 text-[11px] leading-snug text-stone/85">
-          {p.recommendation.reason}
-        </p>
+        <PlanningResultPanel plan={plan} variant="dark" />
 
         {p.sessionActive && p.phase === "inspect" && (
           <button
             type="button"
             onClick={p.onResetPlacement}
-            className="mx-4 mt-2 w-[calc(100%-2rem)] rounded-xl bg-white/10 py-2 text-sm"
+            className="w-full rounded-xl bg-white/10 py-2 text-sm"
           >
             Reset placement
           </button>
         )}
 
-        <div className="mt-3 flex gap-2 border-t border-white/10 p-3">
+        <div className="flex gap-2 border-t border-white/10 pt-3">
           <button
             type="button"
             onClick={p.onReset}
@@ -690,6 +685,15 @@ function Hud(p: {
           >
             Start over
           </button>
+          {p.sessionActive && p.phase === "detail" ? (
+            <button
+              type="button"
+              onClick={p.onPlace}
+              className="flex-1 rounded-xl bg-white/10 py-3 text-sm"
+            >
+              Place in AR
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={p.onSave}

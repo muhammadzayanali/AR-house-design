@@ -58,6 +58,35 @@ test.describe("API planning flow (master dataset 15×12)", () => {
     expect(f.feasibility.building_footprint_sqm).toBe(90);
     expect(f.feasibility.remaining_area_sqm).toBe(90);
     expect(f.feasibility.ground_coverage_percent).toBe(50);
+
+    const estimate = await request.post(`${API}/api/space-estimate/`, {
+      data: { land_size_sqm: 180 },
+    });
+    expect(estimate.ok()).toBeTruthy();
+    const est = await estimate.json();
+    expect(est.land_units.marla).toBeCloseTo(7.12, 1);
+    expect(est.land_units.sqft).toBeCloseTo(1937.5, 0);
+    expect(est.planning_summary.room_program.bedrooms).toBe(3);
+    expect(est.planning_summary.room_program.bathrooms).toBe(3);
+    expect(est.planning_summary.room_program.powder_rooms).toBe(1);
+    expect(est.planning_summary.room_sizes.master_bedroom.length_ft).toBe(12);
+    expect(est.planning_summary.cost_estimate.currency).toBe("PKR");
+    expect(est.planning_summary.cost_estimate.source).toContain("Lahore");
+    expect(est.planning_summary.cost_estimate.is_estimate).toBe(true);
+
+    const summary = await request.post(`${API}/api/planning/summary/`, {
+      data: {
+        land_size_sqm: 180,
+        house_id: houseId,
+        plot_length_m: 15,
+        plot_width_m: 12,
+      },
+    });
+    expect(summary.ok()).toBeTruthy();
+    const plan = await summary.json();
+    expect(plan.feasibility.building_footprint_sqm).toBe(90);
+    expect(plan.room_program.bedrooms).toBe(3);
+    expect(plan.cost_estimate.is_estimate).toBe(true);
   });
 
   test("register → project → ask consultant (local RAG)", async ({ request }) => {

@@ -34,17 +34,25 @@ class HouseDesign(models.Model):
 
     bedrooms = models.PositiveSmallIntegerField()
     bathrooms = models.PositiveSmallIntegerField(default=1)
+    powder_rooms = models.PositiveSmallIntegerField(default=0)
     floors = models.PositiveSmallIntegerField()
     living_rooms = models.PositiveSmallIntegerField(default=1)
     family_rooms = models.PositiveSmallIntegerField(default=0)
     dining_rooms = models.PositiveSmallIntegerField(default=1)
+    drawing_rooms = models.PositiveSmallIntegerField(default=0)
     kitchens = models.PositiveSmallIntegerField(default=1)
+    dirty_kitchens = models.PositiveSmallIntegerField(default=0)
+    study_rooms = models.PositiveSmallIntegerField(default=0)
     parking_spaces = models.PositiveSmallIntegerField(default=0)
+    parking_spaces_max = models.PositiveSmallIntegerField(null=True, blank=True)
     balconies = models.PositiveSmallIntegerField(default=0)
     terraces = models.PositiveSmallIntegerField(default=0)
     garage = models.BooleanField(default=False)
     pool = models.BooleanField(default=False)
     garden = models.BooleanField(default=True)
+
+    # Approximate room sizes in feet: { name: {length_ft, width_ft, area_sqft} }
+    room_sizes = models.JSONField(default=dict, blank=True)
 
     # Legacy bool kept in sync with parking_spaces > 0
     parking = models.BooleanField(default=False)

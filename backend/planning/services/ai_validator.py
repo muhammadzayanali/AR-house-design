@@ -142,7 +142,6 @@ def validate_ai_text(
     if isinstance(beds, int):
         m = re.search(r"(\d+)\s*bedrooms?", text, re.I)
         if m and int(m.group(1)) != beds and int(m.group(1)) not in (0, 1):
-            # allow ranges like "3–4" only if includes fact
             if not re.search(
                 r"{0}\s*[–\-]\s*\d+\s*bedrooms?|\d+\s*[–\-]\s*{0}\s*bedrooms?".format(beds),
                 text,
@@ -150,6 +149,23 @@ def validate_ai_text(
             ):
                 if abs(int(m.group(1)) - beds) >= 1:
                     return False, "bedroom_mismatch:{0}_vs_{1}".format(m.group(1), beds)
+
+    baths = facts.get("bathrooms")
+    if isinstance(baths, int):
+        m = re.search(r"(\d+)\s*bathrooms?", text, re.I)
+        if m and int(m.group(1)) != baths and abs(int(m.group(1)) - baths) >= 1:
+            if not re.search(
+                r"{0}\s*[–\-]\s*\d+\s*bathrooms?|\d+\s*[–\-]\s*{0}\s*bathrooms?".format(baths),
+                text,
+                re.I,
+            ):
+                return False, "bathroom_mismatch:{0}_vs_{1}".format(m.group(1), baths)
+
+    floors = facts.get("floors")
+    if isinstance(floors, int):
+        m = re.search(r"(\d+)\s*(?:storey|story|floor)s?\b", text, re.I)
+        if m and int(m.group(1)) != floors and abs(int(m.group(1)) - floors) >= 1:
+            return False, "floors_mismatch:{0}_vs_{1}".format(m.group(1), floors)
 
     # Footprint contradictions (e.g. invent 145 m² when fact is 90)
     foot = facts.get("building_footprint_sqm")
@@ -162,5 +178,22 @@ def validate_ai_text(
             claimed = float(m.group(1))
             if not _close(claimed, float(foot), tol=0.05):
                 return False, "footprint_mismatch:{0}_vs_{1}".format(claimed, foot)
+
+    # Master bedroom size contradictions against room_sizes facts
+    sizes = facts.get("room_sizes") or {}
+    if isinstance(sizes, dict):
+        master = sizes.get("master_bedroom") or {}
+        if isinstance(master, dict) and master.get("length_ft") and master.get("width_ft"):
+            ml, mw = float(master["length_ft"]), float(master["width_ft"])
+            for m in re.finditer(
+                r"master(?:\s+bed(?:room)?)?[^\d]{0,24}(\d+)\s*[x×]\s*(\d+)\s*ft",
+                text,
+                flags=re.IGNORECASE,
+            ):
+                if not (
+                    (_close(float(m.group(1)), ml) and _close(float(m.group(2)), mw))
+                    or (_close(float(m.group(1)), mw) and _close(float(m.group(2)), ml))
+                ):
+                    return False, "master_size_mismatch"
 
     return True, None

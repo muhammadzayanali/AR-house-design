@@ -1,3 +1,9 @@
+export type RoomSize = {
+  length_ft: number;
+  width_ft: number;
+  area_sqft?: number;
+};
+
 export type HouseDesign = {
   id: number;
   name: string;
@@ -19,18 +25,24 @@ export type HouseDesign = {
   building_footprint_sqm?: number;
   bedrooms: number;
   bathrooms?: number;
+  powder_rooms?: number;
   floors: number;
   living_rooms?: number;
   family_rooms?: number;
   dining_rooms?: number;
+  drawing_rooms?: number;
   kitchens?: number;
+  dirty_kitchens?: number;
+  study_rooms?: number;
   parking_spaces?: number;
+  parking_spaces_max?: number | null;
   balconies?: number;
   terraces?: number;
   garage?: boolean;
   pool?: boolean;
   garden?: boolean;
   parking: boolean;
+  room_sizes?: Record<string, RoomSize>;
   estimated_cost_pkr: number;
   estimated_cost_min?: number | null;
   estimated_cost_max?: number | null;
@@ -80,22 +92,79 @@ export type DesignMatchResponse = {
   match_kind: "exact" | "nearby" | "all";
   exact: HouseDesign[];
   nearby: HouseDesign[];
-  preliminary_space: {
-    plot_area_sqm: number;
-    estimate: Record<string, string>;
-    disclaimer: string;
-  };
+  preliminary_space: Preliminary;
+  planning_summary?: PlanningSummary;
   message?: string | null;
+};
+
+export type CostEstimate = {
+  currency: string;
+  quality: string;
+  min: number;
+  max: number;
+  mid?: number;
+  covered_area_m2?: number;
+  covered_area_sqft?: number;
+  built_area_m2?: number;
+  built_area_sqft?: number;
+  floors?: number;
+  reference_rate_pkr_per_sqft?: number;
+  source: string;
+  is_estimate: boolean;
+  estimate_type?: string;
+  disclaimer?: string;
+};
+
+export type PlanningSummary = {
+  plot?: {
+    area_m2: number;
+    area_sqft?: number;
+    marla?: number;
+    kanal?: number;
+    acre?: number;
+    display_label?: string;
+  };
+  planning?: {
+    band?: string;
+    band_label?: string;
+    title?: string;
+    recommended_floors?: number;
+    covered_area_m2?: number;
+    covered_area_sqft?: number;
+    coverage_percent?: number;
+    remaining_area_m2?: number;
+    source?: string;
+    room_sizes_source?: string;
+  };
+  room_program?: Record<string, number | boolean | null>;
+  room_sizes?: Record<string, RoomSize>;
+  cost_estimate?: CostEstimate;
+  feasibility?: Feasibility;
+  catalog_cost?: Record<string, unknown>;
+  disclaimer?: string;
+  estimate?: Record<string, string>;
 };
 
 export type LandUnits = {
   sqm: number;
+  sqft?: number;
   marla: number;
   kanal: number;
   acre: number;
   display_unit: string;
   display_value: number;
   display_label: string;
+};
+
+export type Preliminary = {
+  plot_area_sqm: number;
+  estimate: Record<string, string>;
+  disclaimer: string;
+  planning?: PlanningSummary["planning"];
+  room_program?: PlanningSummary["room_program"];
+  room_sizes?: Record<string, RoomSize>;
+  cost_estimate?: CostEstimate;
+  plot?: PlanningSummary["plot"];
 };
 
 export type WorldPoint = { x: number; y: number; z: number };

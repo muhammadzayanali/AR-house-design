@@ -88,7 +88,11 @@ class GroundedContextTests(TestCase):
         self.assertEqual(g["facts"]["bedrooms"], 3)
         self.assertEqual(g["facts"]["building_footprint_sqm"], 90)
         self.assertEqual(g["facts"]["coverage_percent"], 50.0)
-        self.assertEqual(g["estimates"]["cost_min"], 14_000_000)
+        self.assertEqual(g["estimates"]["catalog_cost_min"], 14_000_000)
+        self.assertEqual(g["estimates"]["catalog_cost_max"], 19_000_000)
+        self.assertIn("Lahore", g["estimates"]["cost_source"] or "")
+        self.assertGreater(g["estimates"]["cost_min"], 0)
+        self.assertGreaterEqual(g["estimates"]["cost_max"], g["estimates"]["cost_min"])
         self.assertTrue(len(g["limitations"]) >= 3)
 
     def test_match_reason_block(self):

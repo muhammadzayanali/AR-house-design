@@ -70,15 +70,46 @@ SPACE_BANDS = [
 
 
 def preliminary_space_estimate(plot_area_sqm: float) -> Dict[str, Any]:
-    size = float(plot_area_sqm)
-    band = next((b for b in SPACE_BANDS if b["min"] <= size < b["max"]), SPACE_BANDS[-1])
+    """Backward-compatible wrapper around the structured planning engine."""
+    from .planning_engine import build_preliminary_plan
+
+    plan = build_preliminary_plan(plot_area_sqm)
     return {
-        "plot_area_sqm": round(size, 2),
-        "estimate": {k: v for k, v in band.items() if k not in ("min", "max")},
-        "disclaimer": (
-            "Preliminary space estimate from configured area bands only. "
-            "After you select a catalog design, that design's room programme is authoritative."
-        ),
+        "plot_area_sqm": plan["plot"]["area_m2"],
+        "estimate": plan["estimate"],
+        "planning": plan["planning"],
+        "room_program": plan["room_program"],
+        "room_sizes": plan["room_sizes"],
+        "cost_estimate": plan["cost_estimate"],
+        "plot": plan["plot"],
+        "disclaimer": plan["disclaimer"],
+    }
+
+
+def design_room_program(house) -> Dict[str, Any]:
+    parking_max = getattr(house, "parking_spaces_max", None)
+    if parking_max is None:
+        parking_max = house.parking_spaces
+    return {
+        "bedrooms": house.bedrooms,
+        "bathrooms": house.bathrooms,
+        "powder_rooms": getattr(house, "powder_rooms", 0) or 0,
+        "living_rooms": house.living_rooms,
+        "family_rooms": house.family_rooms,
+        "dining_rooms": house.dining_rooms,
+        "drawing_rooms": getattr(house, "drawing_rooms", 0) or 0,
+        "kitchens": house.kitchens,
+        "dirty_kitchens": getattr(house, "dirty_kitchens", 0) or 0,
+        "study_rooms": getattr(house, "study_rooms", 0) or 0,
+        "parking_spaces": house.parking_spaces,
+        "parking_spaces_min": house.parking_spaces,
+        "parking_spaces_max": parking_max,
+        "balconies": house.balconies,
+        "terraces": house.terraces,
+        "garage": house.garage,
+        "pool": house.pool,
+        "garden": house.garden,
+        "floors": house.floors,
     }
 
 
@@ -98,15 +129,12 @@ def compute_feasibility(
     coverage = (footprint / plot * 100.0) if plot > 0 else 0.0
 
     width_ok = None
-    depth_ok = None
     bw = float(getattr(house, "building_width_m", 0) or 0)
     bd = float(getattr(house, "building_depth_m", 0) or 0)
     if plot_length_m and plot_width_m and bw and bd:
-        # Orient house either way on the plot rectangle
         a = float(plot_length_m)
         b = float(plot_width_m)
         width_ok = (bw <= a and bd <= b) or (bw <= b and bd <= a)
-        depth_ok = width_ok
 
     if footprint > plot:
         status = "oversized"
@@ -146,24 +174,6 @@ def compute_feasibility(
             "Preliminary planning calculation only. Not a bylaw check, "
             "structural design, or municipal approval."
         ),
-    }
-
-
-def design_room_program(house) -> Dict[str, Any]:
-    return {
-        "bedrooms": house.bedrooms,
-        "bathrooms": house.bathrooms,
-        "living_rooms": house.living_rooms,
-        "family_rooms": house.family_rooms,
-        "dining_rooms": house.dining_rooms,
-        "kitchens": house.kitchens,
-        "parking_spaces": house.parking_spaces,
-        "balconies": house.balconies,
-        "terraces": house.terraces,
-        "garage": house.garage,
-        "pool": house.pool,
-        "garden": house.garden,
-        "floors": house.floors,
     }
 
 

@@ -5,9 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ArchViewer } from "@/components/architecture/ArchViewer";
+import { PlanningResultPanel } from "@/components/planning/PlanningResultPanel";
 import { ModelViewer } from "@/components/viewer/ModelViewer";
 import { api } from "@/lib/api";
-import type { Project, Report } from "@/lib/types";
+import type { PlanningSummary, Project, Report } from "@/lib/types";
 import { ACCURACY_DISCLAIMER, UNIT_CAVEAT } from "@/lib/types";
 import { formatPkr } from "@/lib/units/land";
 
@@ -15,6 +16,7 @@ export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
+  const [planning, setPlanning] = useState<PlanningSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState("Why was this house recommended?");
   const [answer, setAnswer] = useState<string | null>(null);
@@ -24,7 +26,21 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     api<Project>(`/api/projects/${params.id}/`)
-      .then(setProject)
+      .then((proj) => {
+        setProject(proj);
+        const body: Record<string, number> = {
+          land_size_sqm: proj.land_size_sqm,
+        };
+        if (proj.selected_house?.id) body.house_id = proj.selected_house.id;
+        if (proj.plot_length_m != null) body.plot_length_m = proj.plot_length_m;
+        if (proj.plot_width_m != null) body.plot_width_m = proj.plot_width_m;
+        return api<PlanningSummary>("/api/planning/summary/", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+          .then(setPlanning)
+          .catch(() => setPlanning(null));
+      })
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Project not found"),
       );
@@ -148,10 +164,13 @@ export default function ProjectDetailPage() {
             <dd>{project.land_units.sqm} m²</dd>
           </div>
           <div>
-            <dt className="text-muted">Marla / Kanal / Acre</dt>
+            <dt className="text-muted">Marla / Kanal / Acre / sq ft</dt>
             <dd>
               {project.land_units.marla} / {project.land_units.kanal} /{" "}
               {project.land_units.acre}
+              {project.land_units.sqft != null
+                ? ` / ${project.land_units.sqft.toLocaleString()} sq ft`
+                : ""}
             </dd>
           </div>
           <div>
@@ -169,6 +188,13 @@ export default function ProjectDetailPage() {
         </dl>
       </section>
 
+      {planning && (
+        <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-ink/10">
+          <h2 className="mb-4 font-serif text-2xl">Architectural planning</h2>
+          <PlanningResultPanel plan={planning} variant="light" />
+        </section>
+      )}
+
       {house && (
         <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-ink/10">
           <h2 className="font-serif text-2xl">Selected design</h2>
@@ -184,31 +210,10 @@ export default function ProjectDetailPage() {
               <ModelViewer glbUrl={house.glb_url || house.model_url} design={house} />
             )}
           </div>
-          <dl className="mt-6 grid gap-3 sm:grid-cols-3 text-sm">
-            <div>
-              <dt className="text-muted">Bedrooms / Baths</dt>
-              <dd>
-                {house.bedrooms} / {house.bathrooms}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted">Living / Dining / Kitchen</dt>
-              <dd>
-                {house.living_rooms ?? 1} / {house.dining_rooms ?? 1} /{" "}
-                {house.kitchens ?? 1}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted">Parking / Floors</dt>
-              <dd>
-                {house.parking_spaces ?? (house.parking ? 1 : 0)} / {house.floors}
-              </dd>
-            </div>
-          </dl>
         </section>
       )}
 
-      {project.feasibility && (
+      {project.feasibility && !planning && (
         <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-ink/10">
           <h2 className="font-serif text-2xl">Plot utilization</h2>
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
@@ -261,61 +266,35 @@ export default function ProjectDetailPage() {
               : ""}
           </p>
         )}
-        <p className="mt-4 whitespace-pre-wrap leading-7 text-ink/90">
-          {project.latest_report?.narration_text ??
-            "No report yet. Tap regenerate — local RAG works without HF_TOKEN."}
+        <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-ink/90">
+          {project.latest_report?.narration_text || "No report yet — generate one."}
         </p>
       </section>
 
       <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-ink/10">
-        <h2 className="font-serif text-2xl">Ask the consultant</h2>
+        <h2 className="font-serif text-2xl">Ask consultant</h2>
         <p className="mt-1 text-sm text-muted">
-          Local RAG answers from this project&apos;s saved fields plus a built-in
-          architecture knowledge base. Optional Hugging Face polish when configured.
-          Never sees the camera feed. Not a licensed architect.
+          Answers are grounded on project facts, HouseDesign programme, feasibility, and
+          Lahore cost estimate — not invented by the model.
         </p>
         <textarea
-          className="mt-4 w-full rounded-xl border border-ink/15 p-3"
+          className="mt-4 w-full rounded-2xl border border-ink/10 bg-paper px-4 py-3 text-sm"
           rows={3}
-          maxLength={800}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
         />
         <button
           type="button"
           onClick={() => void ask()}
-          disabled={busy}
-          className="mt-3 rounded-full bg-ink px-5 py-2 text-paper"
+          disabled={busy || !question.trim()}
+          className="mt-3 rounded-full bg-brass px-5 py-2 text-sm font-medium text-ink disabled:opacity-50"
         >
-          {busy ? "Thinking…" : "Ask"}
+          Ask
         </button>
         {answer && (
-          <div className="mt-4">
-            {answerSource && (
-              <p className="text-xs text-muted">
-                Source:{" "}
-                {answerSource === "huggingface"
-                  ? "Hugging Face LLM (+ local RAG context)"
-                  : answerSource === "local_rag"
-                    ? "Local RAG (project fields + knowledge base)"
-                    : "Fallback"}
-              </p>
-            )}
-            <p className="mt-2 whitespace-pre-wrap leading-7">{answer}</p>
-            <div className="mt-4 grid gap-2 text-[11px] text-muted sm:grid-cols-3">
-              <p className="rounded-lg bg-ink/5 p-2">
-                <span className="font-medium text-ink">Facts</span> — plot, design,
-                rooms, footprint, coverage from Django engines.
-              </p>
-              <p className="rounded-lg bg-ink/5 p-2">
-                <span className="font-medium text-ink">Estimates</span> — catalog cost
-                bands only (not quotations).
-              </p>
-              <p className="rounded-lg bg-ink/5 p-2">
-                <span className="font-medium text-ink">Limitations</span> — not a survey,
-                bylaw check, or licensed architect.
-              </p>
-            </div>
+          <div className="mt-4 rounded-2xl bg-paper/80 p-4 text-sm leading-relaxed">
+            <p className="text-xs text-muted">Source: {answerSource}</p>
+            <p className="mt-2 whitespace-pre-wrap">{answer}</p>
           </div>
         )}
       </section>
