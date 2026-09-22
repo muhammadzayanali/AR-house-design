@@ -30,14 +30,27 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(resolveApiUrl(path), { ...init, headers });
-  if (response.status === 204) return undefined as T;
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new ApiError(formatApiError(data, response.status), response.status, data);
+  try {
+    const response = await fetch(resolveApiUrl(path), { ...init, headers });
+    if (response.status === 204) return undefined as T;
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!response.ok) {
+      throw new ApiError(formatApiError(data, response.status), response.status, data);
+    }
+    return data as T;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+      throw new ApiError(
+        "Failed to reach the API. Keep Django running on your laptop (0.0.0.0:8000), use the same Wi‑Fi, and in Chrome allow insecure content for this Netlify site (HTTPS → HTTP LAN).",
+        0,
+        null,
+      );
+    }
+    throw err;
   }
-  return data as T;
 }
 
 function formatApiError(data: unknown, status: number) {

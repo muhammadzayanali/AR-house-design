@@ -3,17 +3,18 @@
 import { createXRStore } from "@react-three/xr";
 
 /**
- * v6 XR store. `true` = optional WebXR feature; `'required'` fails the session
- * if the phone cannot provide it. Headset-only features are turned off so
- * Android Chrome immersive-ar is more likely to start.
+ * Minimal immersive-ar config for Android Chrome + ARCore.
+ * Requesting hit-test as "required" or enabling plane/anchor extras
+ * causes: "The specified session configuration is not supported"
+ * on many phones. Optional hit-test still enables ground tapping.
  */
 export const xrStore = createXRStore({
-  hitTest: "required",
+  hitTest: true,
   domOverlay: true,
-  planeDetection: true,
-  anchors: true,
+  anchors: false,
+  planeDetection: false,
+  meshDetection: false,
   handTracking: false,
   bodyTracking: false,
   layers: false,
-  meshDetection: false,
 });

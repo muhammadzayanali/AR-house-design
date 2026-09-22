@@ -170,7 +170,14 @@ export default function ARExperience() {
     try {
       await xrStore.enterAR();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start AR");
+      const raw = err instanceof Error ? err.message : String(err);
+      const unsupported =
+        /session configuration is not supported|not supported/i.test(raw);
+      setError(
+        unsupported
+          ? "AR session could not start on this phone (WebXR config). Use manual length × width below, or update Chrome + Google Play Services for AR."
+          : raw || "Could not start AR",
+      );
     }
   }
 
