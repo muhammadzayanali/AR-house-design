@@ -27,15 +27,17 @@ cd backend
 
 Find your Mac IP (e.g. `192.168.1.140`).
 
-## 3. Netlify env (Site settings → Environment variables)
+## 3. Netlify env (baked in `netlify.toml` + `frontend/.env.production`)
+
+Current LAN API base:
 
 ```text
-NEXT_PUBLIC_API_ORIGIN=http://192.168.1.140:8000
+NEXT_PUBLIC_API_ORIGIN=http://192.168.2.105:8000
 ```
 
-Use your real LAN IP. Rebuild/redeploy after changing it.
+If your Mac IP changes, update both files and push `devel` again (or set the same var in Netlify UI).
 
-Do **not** set `HF_TOKEN` on Netlify.
+**Mixed content note:** Netlify is HTTPS; local Django is HTTP. Some browsers block that. Fix: same Wi‑Fi + allow “insecure content” for the site, or use a Cloudflare/ngrok HTTPS tunnel to Django instead.
 
 ## 4. Netlify build settings
 
