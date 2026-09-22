@@ -14,8 +14,9 @@
 [build.environment]
   NODE_VERSION = "20"
   # Browser API → tunnel. Media <img> uses /api/media-proxy (same origin) → tunnel.
-  NEXT_PUBLIC_API_ORIGIN = "https://flat-singers-hammer.loca.lt"
-  DJANGO_ORIGIN = "https://flat-singers-hammer.loca.lt"
+  # Keep subdomain fixed: npx -y localtunnel --port 8000 --subdomain late-zebras-end
+  NEXT_PUBLIC_API_ORIGIN = "https://late-zebras-end.loca.lt"
+  DJANGO_ORIGIN = "https://late-zebras-end.loca.lt"
 
 # Allow WebXR / camera for immersive AR on Android Chrome.
 [[headers]]

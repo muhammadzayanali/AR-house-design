@@ -12,12 +12,12 @@
 # Terminal A — Django (you should see request logs here)
 cd backend && ../.venv/bin/python manage.py runserver 0.0.0.0:8000
 
-# Terminal B — HTTPS tunnel
-npx -y localtunnel --port 8000
-# → https://something.loca.lt  (update netlify.toml if URL changes)
+# Terminal B — HTTPS tunnel (fixed subdomain so Netlify keeps working after restarts)
+npx -y localtunnel --port 8000 --subdomain late-zebras-end
+# → https://late-zebras-end.loca.lt
 ```
 
-Set `NEXT_PUBLIC_API_ORIGIN` in `netlify.toml` / `frontend/.env.production` to that tunnel URL, push `devel`, redeploy.
+Set `NEXT_PUBLIC_API_ORIGIN` / `DJANGO_ORIGIN` in `netlify.toml` and `frontend/.env.production` to that URL (already set for `late-zebras-end`). If the subdomain is taken, pick another and update both files, then push `devel` and redeploy.
 
 Phone browser calls the tunnel **directly** for `/api` (CORS allows `Bypass-Tunnel-Reminder`). Do **not** rely on Netlify rewriting `/api` to the tunnel — that caused 502/503.
 
