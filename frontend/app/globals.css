@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #14110e;
+  --paper: #f4efe6;
+  --stone: #cfc4b0;
+  --brass: #b0893e;
+  --brass-dark: #8a6a2a;
+  --muted: #6b6258;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-stone: var(--stone);
+  --color-brass: var(--brass);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-outfit);
+  --font-serif: var(--font-fraunces);
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+.font-serif {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+.ar-lock {
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  overflow: hidden;
+  height: 100dvh;
+}

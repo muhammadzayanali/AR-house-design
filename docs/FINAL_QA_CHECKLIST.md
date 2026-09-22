@@ -1,0 +1,26 @@
+# Final QA Checklist
+
+- [ ] Register
+- [ ] Login
+- [ ] Logout
+- [ ] Refresh stays logged in
+- [ ] Dashboard totals + AI status
+- [ ] Manual L×W measurement
+- [ ] Unit conversion display (m² / Marla / Kanal / Acre)
+- [ ] Accuracy disclaimer visible
+- [ ] Recommendation + reason text
+- [ ] 3D OrbitControls viewer
+- [ ] GLB loads (or clear error)
+- [ ] Save project
+- [ ] Project detail plot + house + report
+- [ ] Regenerate report (source labeled correctly)
+- [ ] Ask consultant (source labeled `local_rag` or `huggingface`; beauty Q gets style tips)
+- [ ] Delete project
+- [ ] User B cannot open User A project
+- [ ] AR Enter (Android Chrome HTTPS) — device required
+- [ ] Mark 3–8 corners, finish, place house — device required
+- [ ] Unsupported browser shows manual fallback (no fake AR)
+- [ ] `python manage.py test planning`
+- [ ] `npm run typecheck` / `npm run build`
+- [ ] Without HF_TOKEN → Ask still returns `local_rag` answers
+- [ ] HF_TOKEN set → health `llm_configured: true` (optional polish)
