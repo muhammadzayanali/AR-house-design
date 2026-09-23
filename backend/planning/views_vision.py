@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -17,6 +18,8 @@ from rest_framework.views import APIView
 from .services import vision_measurement as vm
 from .services.depth_model_service import get_depth_model_service
 from .services.vision_opencv import OpenCVUnavailable
+
+logger = logging.getLogger("planning.vision")
 
 
 def _image_bytes_from_request(request) -> bytes:
@@ -73,13 +76,19 @@ class VisionDepthView(APIView):
     def post(self, request):
         try:
             image_bytes = _image_bytes_from_request(request)
+            logger.info("vision.api.depth_request bytes=%s", len(image_bytes))
             result = vm.analyse_frame(image_bytes)
-            # Drop runtime details from normal success payload for clarity;
-            # keep timings for debug when ?debug=1
+            logger.info(
+                "vision.api.depth_response success=%s quality=%s session=%s",
+                result.get("success"),
+                result.get("quality"),
+                result.get("session_id"),
+            )
             if request.query_params.get("debug") != "1":
                 result.pop("runtime", None)
             return Response(result, status=status.HTTP_200_OK)
         except OpenCVUnavailable as exc:
+            logger.error("vision.api.opencv_unavailable: %s", exc)
             return Response(
                 {
                     "success": False,
@@ -90,6 +99,7 @@ class VisionDepthView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except ValueError as exc:
+            logger.warning("vision.api.depth_bad_request: %s", exc)
             return Response(
                 {
                     "success": False,
@@ -102,6 +112,7 @@ class VisionDepthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as exc:
+            logger.exception("vision.api.depth_failed: %s", exc)
             return Response(
                 {
                     "success": False,
@@ -143,11 +154,22 @@ class VisionMeasureView(APIView):
             session_id = data.get("session_id") or (
                 depth_session.get("session_id") if isinstance(depth_session, dict) else None
             )
+            logger.info(
+                "vision.api.measure_request session=%s points=%s cal=%s",
+                session_id,
+                len(points or []),
+                {
+                    "known_length_m": (calibration or {}).get("known_length_m"),
+                    "ref_a_index": (calibration or {}).get("ref_a_index"),
+                    "ref_b_index": (calibration or {}).get("ref_b_index"),
+                },
+            )
             if session_id and (not depth_session or "values" not in (depth_session or {})):
                 from .services.depth_session_store import get_depth_session
 
                 stored = get_depth_session(str(session_id))
                 if stored is None:
+                    logger.warning("vision.api.session_invalid id=%s", session_id)
                     return Response(
                         {
                             "success": False,
@@ -174,9 +196,16 @@ class VisionMeasureView(APIView):
                 quality_hint=data.get("quality"),
             )
             result["measurement_method"] = "ai_camera"
+            logger.info(
+                "vision.api.measure_ok area_m2=%s quality=%s edges=%s",
+                (result.get("measurement") or {}).get("area_m2"),
+                result.get("quality"),
+                result.get("edge_lengths_m"),
+            )
             return Response(result, status=status.HTTP_200_OK)
         except ValueError as exc:
             msg = str(exc)
+            logger.warning("vision.api.measure_rejected: %s", msg)
             actions = [
                 "Re-select boundary points in order around the plot",
                 "Provide a known reference length in metres",
@@ -197,6 +226,7 @@ class VisionMeasureView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as exc:
+            logger.exception("vision.api.measure_failed: %s", exc)
             return Response(
                 {
                     "success": False,

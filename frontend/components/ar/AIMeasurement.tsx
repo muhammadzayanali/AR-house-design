@@ -50,6 +50,8 @@ type MeasureResponse = {
   quality: string;
   points: Array<{ image_x: number; image_y: number; world_x: number; world_z: number }>;
   world_points: WorldPoint[];
+  edge_lengths_m?: number[];
+  diagnostics?: Record<string, unknown>;
   calibration: { method: string; known_length_m: number };
   limitations: string[];
   land_units: LandUnits;
@@ -160,7 +162,7 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     const ctx = canvas.getContext("2d");
     if (!ctx) return Promise.reject(new Error("Canvas unavailable"));
     ctx.drawImage(video, 0, 0, w, h);
-    setFrameSize({ w, h });
+    // Do NOT set frameSize here — after Analyze, taps use working depth size.
     return new Promise((resolve, reject) => {
       canvas.toBlob(
         (blob) => (blob ? resolve(blob) : reject(new Error("Failed to capture frame"))),
@@ -193,6 +195,10 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
       setDepthViz(data.depth_visualization || data.visualization || null);
       setDepthSession(data.depth_session || null);
       setSessionId(data.session_id || null);
+      // CRITICAL: taps must match depth/working image size, not raw camera pixels
+      if (data.width && data.height) {
+        setFrameSize({ w: data.width, h: data.height });
+      }
       setQuality(data.quality || data.ground_plane?.confidence || "MEDIUM");
       setMode("depth");
       if (!data.success || data.ground_plane?.ok === false) {

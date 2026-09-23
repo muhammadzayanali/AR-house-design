@@ -118,3 +118,28 @@ HF_DEPTH_MODEL = os.getenv(
 )
 HF_DEPTH_TYPE = os.getenv("HF_DEPTH_TYPE", "relative")  # relative | metric
 VISION_MOCK = os.getenv("VISION_MOCK", "").lower() in ("1", "true", "yes")
+
+# AI Camera measurement diagnostics — look for "planning.vision" in runserver logs
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "vision": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "vision",
+        },
+    },
+    "loggers": {
+        "planning.vision": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
