@@ -400,6 +400,14 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
             Marla · ≈ {result.measurement.kanal.toFixed(3)} Kanal
           </p>
           <p className="mt-2 text-xs">Measurement Quality: {result.quality}</p>
+          {result.edge_lengths_m && result.edge_lengths_m.length > 0 ? (
+            <p className="mt-1 text-[10px] text-stone">
+              Edge lengths (m): {result.edge_lengths_m.map((e) => e.toFixed(2)).join(" · ")}
+            </p>
+          ) : null}
+          <p className="mt-1 text-[10px] text-stone/80">
+            Check laptop Django logs for `planning.vision` diagnostics.
+          </p>
         </div>
       ) : null}
 
