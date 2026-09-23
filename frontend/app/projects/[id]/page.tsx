@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ArchViewer } from "@/components/architecture/ArchViewer";
+import { ConsultantChat } from "@/components/planning/ConsultantChat";
 import { PlanningResultPanel } from "@/components/planning/PlanningResultPanel";
 import { ModelViewer } from "@/components/viewer/ModelViewer";
 import { api } from "@/lib/api";
@@ -18,9 +19,6 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [planning, setPlanning] = useState<PlanningSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [question, setQuestion] = useState("Why was this house recommended?");
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [answerSource, setAnswerSource] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,29 +70,6 @@ export default function ProjectDetailPage() {
       setWarning(report.warning ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Report failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function ask() {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await api<{
-        answer: string;
-        source: string;
-        warning?: string | null;
-        ai_available?: boolean;
-      }>(`/api/projects/${params.id}/ask/`, {
-        method: "POST",
-        body: JSON.stringify({ question }),
-      });
-      setAnswer(result.answer);
-      setAnswerSource(result.source);
-      setWarning(result.warning ?? null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Q&A failed");
     } finally {
       setBusy(false);
     }
@@ -280,33 +255,11 @@ export default function ProjectDetailPage() {
         </p>
       </section>
 
-      <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-ink/10">
-        <h2 className="font-serif text-2xl">Ask consultant</h2>
-        <p className="mt-1 text-sm text-muted">
-          Answers are grounded on project facts, HouseDesign programme, feasibility, and
-          Lahore cost estimate — not invented by the model.
-        </p>
-        <textarea
-          className="mt-4 w-full rounded-2xl border border-ink/10 bg-paper px-4 py-3 text-sm"
-          rows={3}
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-        />
-        <button
-          type="button"
-          onClick={() => void ask()}
-          disabled={busy || !question.trim()}
-          className="mt-3 rounded-full bg-brass px-5 py-2 text-sm font-medium text-ink disabled:opacity-50"
-        >
-          Ask
-        </button>
-        {answer && (
-          <div className="mt-4 rounded-2xl bg-paper/80 p-4 text-sm leading-relaxed">
-            <p className="text-xs text-muted">Source: {answerSource}</p>
-            <p className="mt-2 whitespace-pre-wrap">{answer}</p>
-          </div>
-        )}
-      </section>
+      <ConsultantChat
+        projectId={params.id}
+        onWarning={setWarning}
+        onError={setError}
+      />
     </main>
   );
 }
