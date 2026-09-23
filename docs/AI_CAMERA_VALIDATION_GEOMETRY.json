@@ -1,0 +1,40 @@
+{
+  "note": "World-coordinate geometry only \u2014 not camera inference accuracy.",
+  "cases": [
+    {
+      "case": "5x5",
+      "ground_truth": 25.0,
+      "predicted": 25.0,
+      "absolute_error": 0.0,
+      "percentage_error": 0.0
+    },
+    {
+      "case": "10x10",
+      "ground_truth": 100.0,
+      "predicted": 100.0,
+      "absolute_error": 0.0,
+      "percentage_error": 0.0
+    },
+    {
+      "case": "10x15",
+      "ground_truth": 150.0,
+      "predicted": 150.0,
+      "absolute_error": 0.0,
+      "percentage_error": 0.0
+    },
+    {
+      "case": "15x12",
+      "ground_truth": 180.0,
+      "predicted": 180.0,
+      "absolute_error": 0.0,
+      "percentage_error": 0.0
+    },
+    {
+      "case": "irregular",
+      "ground_truth": 270.0,
+      "predicted": 270.0,
+      "absolute_error": 0.0,
+      "percentage_error": 0.0
+    }
+  ]
+}

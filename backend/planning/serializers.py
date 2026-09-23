@@ -161,6 +161,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "plot_length_m",
             "plot_width_m",
             "measurement_type",
+            "measurement_quality",
+            "calibration_method",
             "land_size_display_unit",
             "marla",
             "kanal",
@@ -224,6 +226,15 @@ class ProjectSerializer(serializers.ModelSerializer):
         if measurement == Project.MEASUREMENT_AR and points is not None and len(points) > 0 and len(points) < 3:
             raise serializers.ValidationError(
                 {"plot_points": "AR polygons need at least 3 boundary points."}
+            )
+        if (
+            measurement == Project.MEASUREMENT_AI_CAMERA
+            and points is not None
+            and len(points) > 0
+            and len(points) < 3
+        ):
+            raise serializers.ValidationError(
+                {"plot_points": "AI camera polygons need at least 3 boundary points."}
             )
         length = attrs.get("plot_length_m")
         width = attrs.get("plot_width_m")

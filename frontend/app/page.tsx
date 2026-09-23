@@ -12,18 +12,18 @@ export default function HomePage() {
             Measure the plot. Place the house. Walk around it.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-muted">
-            Plotline is a web-based architectural planning assistant. Scan a
-            vacant plot on your phone, convert the area to Marla/Kanal, match a
-            catalog house with a rule-based engine, and inspect a true-to-scale
-            3D model through the camera. An LLM writes the client report from
-            stored facts — never from photos.
+            Plotline is a web-based architectural planning assistant. Measure a
+            plot with AI Camera (or manual L×W, or optional WebXR), convert the
+            area to Marla/Kanal, match a catalog house with a rule-based engine,
+            and inspect a true-to-scale 3D model. An LLM writes the client report
+            from stored facts — never invents metres from photos.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               href="/ar"
               className="rounded-full bg-ink px-6 py-3 text-paper"
             >
-              Open AR planner
+              Open planner
             </Link>
             <Link
               href="/dashboard"
@@ -35,9 +35,9 @@ export default function HomePage() {
         </div>
         <ol className="space-y-4 rounded-3xl bg-white/50 p-6 ring-1 ring-ink/10">
           {[
-            ["1. Measure", "Tap 2–4 ground corners with WebXR hit-testing. Area is vector geometry on the XZ plane."],
+            ["1. Measure", "AI Camera, Manual L×W, or optional WebXR. Area uses deterministic geometry (shoelace), not an LLM."],
             ["2. Recommend", "Plot size is matched to HouseDesign min/max ranges. No trained model."],
-            ["3. Visualize", "A .glb massing sits on the real plot. Unsupported browsers get OrbitControls."],
+            ["3. Visualize", "Procedural 3D massing on the plot. Unsupported browsers get OrbitControls."],
             ["4. Narrate", "Llama or Qwen turns the saved JSON into a report and answers questions."],
           ].map(([title, body]) => (
             <li key={title}>

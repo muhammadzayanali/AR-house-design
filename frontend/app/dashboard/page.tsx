@@ -132,7 +132,12 @@ export default function DashboardPage() {
                       : ""}
                   </p>
                   <p className="mt-1 text-xs text-muted">
-                    {project.measurement_type === "ar" ? "AR measurement" : "Manual"} ·{" "}
+                    {project.measurement_type === "ar"
+                      ? "AR measurement"
+                      : project.measurement_type === "ai_camera"
+                        ? "AI camera"
+                        : "Manual"}{" "}
+                    ·{" "}
                     {project.latest_report
                       ? `Report: ${project.latest_report.source}`
                       : "No report"}

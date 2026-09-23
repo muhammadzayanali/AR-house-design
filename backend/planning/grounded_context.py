@@ -18,7 +18,22 @@ LIMITATIONS: List[str] = [
     "Procedural 3D is real-time architectural visualization, not photoreal CGI.",
     "AI/consultant text explains stored facts; it does not recalculate measurements.",
     "Parking capacity depends on plot geometry and is conditional, not guaranteed.",
+    "Camera-based AI measurement is approximate and not a professional land-surveying instrument.",
 ]
+
+
+def _measurement_limitations(measurement_type: Optional[str]) -> List[str]:
+    extra: List[str] = []
+    if measurement_type == "ai_camera":
+        extra.extend(
+            [
+                "Plot area was estimated using AI Camera Measurement (OpenCV + depth model + user calibration).",
+                "Measurement quality labels (HIGH/MEDIUM/LOW) are qualitative — not validated accuracy percentages.",
+            ]
+        )
+    elif measurement_type == "ar":
+        extra.append("WebXR / AR hit-test area depends on device tracking quality and may drift.")
+    return extra
 
 
 def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,6 +44,7 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
     planning = facts.get("planning") or prelim.get("planning") or {}
     room_sizes = facts.get("room_sizes") or prelim.get("room_sizes") or {}
     cost = facts.get("cost_estimate") or prelim.get("cost_estimate") or {}
+    measurement_type = facts.get("measurement_type")
 
     verified_facts: Dict[str, Any] = {
         "plot_area_sqm": facts.get("land_size_sqm"),
@@ -38,7 +54,9 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
         "plot_acre": facts.get("land_size_acre"),
         "plot_length_m": facts.get("plot_length_m"),
         "plot_width_m": facts.get("plot_width_m"),
-        "measurement_type": facts.get("measurement_type"),
+        "measurement_type": measurement_type,
+        "measurement_quality": facts.get("measurement_quality"),
+        "calibration_method": facts.get("calibration_method"),
         "selected_style": facts.get("preferred_style") or facts.get("house_style"),
         "selected_design": facts.get("house_name"),
         "building_footprint_sqm": feas.get("building_footprint_sqm")
@@ -91,6 +109,7 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
         "preliminary_space_disclaimer": prelim.get("disclaimer"),
         "planning_title": planning.get("title"),
         "covered_area_m2_estimate": planning.get("covered_area_m2"),
+        "measurement_quality": facts.get("measurement_quality"),
         "cost_disclaimer": cost.get("disclaimer")
         or (
             "Cost figures are preliminary Lahore reference estimates only — "
@@ -103,16 +122,20 @@ def build_grounded_context(facts: Dict[str, Any]) -> Dict[str, Any]:
     if estimates["cost_max"] is None:
         estimates["cost_max"] = facts.get("estimated_cost_max")
 
+    limitations = list(LIMITATIONS) + _measurement_limitations(
+        measurement_type if isinstance(measurement_type, str) else None
+    )
+
     return {
         "facts": verified_facts,
         "estimates": estimates,
-        "limitations": list(LIMITATIONS),
+        "limitations": limitations,
         "meta": {
             "project_id": facts.get("project_id"),
             "project_name": facts.get("project_name"),
             "source_of_truth": (
                 "Deterministic Django engines (units, planning bands, recommendation, "
-                "feasibility, Lahore cost estimator) + HouseDesign catalog. "
+                "feasibility, Lahore cost estimator, OpenCV+calibration geometry) + HouseDesign catalog. "
                 "LLM must not alter facts."
             ),
         },

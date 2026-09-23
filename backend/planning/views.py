@@ -52,6 +52,10 @@ class HealthView(APIView):
                 "ok": True,
                 "llm_configured": is_hf_configured(),
                 "llm_model": settings.HF_MODEL,
+                "vision_depth_model": getattr(
+                    settings, "HF_DEPTH_MODEL", "depth-anything/Depth-Anything-V2-Small-hf"
+                ),
+                "vision_depth_type": getattr(settings, "HF_DEPTH_TYPE", "relative"),
                 "accuracy_disclaimer": (
                     "Plot measurements are approximate planning estimates, "
                     "not a professional land survey."

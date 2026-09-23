@@ -4,3 +4,8 @@ django-cors-headers>=4.4
 Pillow>=10.0
 huggingface_hub>=0.27.0
 python-dotenv>=1.0
+numpy>=1.24
+opencv-python-headless>=4.8
+# Optional for real depth inference (VISION_MOCK=1 skips these in CI):
+# torch
+# transformers>=4.40.0

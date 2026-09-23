@@ -10,8 +10,8 @@
 
 ```text
 1. Register / Login          → Django Token auth (SQLite)
-2. Measure plot             → AR hit-test corners  OR  manual L × W
-3. Area (m²)                → shoelace / rectangle math
+2. Measure plot             → AI Camera  OR  manual L × W  OR  optional WebXR AR
+3. Area (m²)                → shoelace / rectangle math (+ user calibration for AI Camera)
 4. Convert units            → Marla / Kanal / Acre (constants)
 5. Pick architectural style → e.g. Italian Villa
 6. Match catalog designs    → filter by style + plot range
@@ -21,7 +21,19 @@
 10. Report + Ask consultant → Local RAG (+ optional Hugging Face polish)
 ```
 
-**Important:** AI does **not** measure the plot, pick the house by ML, or look at the camera. Numbers come from math + database rules. AI / RAG only **explains**.
+**Measurement priority (device-compatible):**
+
+```text
+AI Camera Measurement (OpenCV + HF depth + calibration)
+        ↓
+Manual Measurement (L × W) — always available
+        ↓
+WebXR / ARCore — optional when the phone supports immersive AR
+```
+
+**Important:** The LLM does **not** measure the plot, pick the house by ML, or invent metres from a photo. Depth AI returns a depth map; OpenCV + calibration + shoelace produce area. Planning numbers come from math + database rules. AI / RAG only **explains**.
+
+See [AI_CAMERA_MEASUREMENT.md](./AI_CAMERA_MEASUREMENT.md).
 
 ---
 

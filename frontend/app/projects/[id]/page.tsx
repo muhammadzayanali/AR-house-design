@@ -175,7 +175,16 @@ export default function ProjectDetailPage() {
           </div>
           <div>
             <dt className="text-muted">Measurement</dt>
-            <dd>{project.measurement_type === "ar" ? "AR hit-test" : "Manual rectangle"}</dd>
+            <dd>
+              {project.measurement_type === "ar"
+                ? "AR hit-test"
+                : project.measurement_type === "ai_camera"
+                  ? "AI camera"
+                  : "Manual rectangle"}
+              {project.measurement_quality
+                ? ` · quality ${project.measurement_quality}`
+                : ""}
+            </dd>
           </div>
           {(project.plot_length_m || project.plot_width_m) && (
             <div>

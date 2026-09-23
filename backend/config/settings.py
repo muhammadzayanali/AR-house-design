@@ -109,3 +109,12 @@ HF_TOKEN = os.getenv("HF_TOKEN", "")
 HF_MODEL = os.getenv("HF_MODEL", "Qwen/Qwen2.5-72B-Instruct")
 HF_PROVIDER = os.getenv("HF_PROVIDER", "auto")
 HF_TIMEOUT = float(os.getenv("HF_TIMEOUT", "25"))
+
+# AI Camera Measurement — local Transformers depth model (free Apache-2.0 Small)
+# Token is NOT required for local download of public Depth Anything V2 Small weights.
+HF_DEPTH_MODEL = os.getenv(
+    "HF_DEPTH_MODEL",
+    "depth-anything/Depth-Anything-V2-Small-hf",
+)
+HF_DEPTH_TYPE = os.getenv("HF_DEPTH_TYPE", "relative")  # relative | metric
+VISION_MOCK = os.getenv("VISION_MOCK", "").lower() in ("1", "true", "yes")

@@ -38,6 +38,22 @@ CORPUS: List[Dict[str, str]] = [
         ),
     },
     {
+        "id": "ai-camera-measurement",
+        "title": "AI camera measurement",
+        "tags": "ai camera opencv depth hugging face measure plot quality calibration survey",
+        "category": "process",
+        "source_type": "process",
+        "text": (
+            "AI Camera Measurement uses the phone browser camera (getUserMedia), OpenCV "
+            "preprocessing, and a free Hugging Face Depth Anything V2 Small depth model "
+            "on the Django backend. The depth model returns visual depth — not plot area. "
+            "Metric scale comes from an explicit user reference length. Area uses the same "
+            "shoelace geometry as AR/manual paths. Quality is HIGH/MEDIUM/LOW qualitative "
+            "labels — never claim a fake accuracy percentage. If depth or ground plane fails, "
+            "use Manual Measurement. WebXR AR remains an optional path when the device supports it."
+        ),
+    },
+    {
         "id": "recommendation-rules",
         "title": "Why a house is recommended",
         "tags": "recommend match catalog style plot range filter deterministic",

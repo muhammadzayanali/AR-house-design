@@ -148,12 +148,14 @@ test.describe("UI smoke (requires Next.js)", () => {
     await expect(page.locator("body")).toBeVisible();
   });
 
-  test("AR page shows manual fallback path", async ({ page }) => {
+  test("AR page shows AI Camera and manual paths", async ({ page }) => {
     const res = await page.goto("/ar");
     if (!res || res.status() >= 500) {
       test.skip(true, "Next.js not reachable");
     }
-    await expect(page.getByText(/Length|manual|Plotline|AR/i).first()).toBeVisible({
+    await expect(
+      page.getByText(/AI Camera Measurement|Length|manual|Plotline/i).first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
   });

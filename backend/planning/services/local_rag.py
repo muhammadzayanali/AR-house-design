@@ -62,6 +62,22 @@ _INTENT_PATTERNS: List[Tuple[str, Sequence[str]]] = [
     ("style", ("style", "italian", "modern", "cottage", "american", "luxury", "traditional", "mediterranean")),
     ("3d", ("3d", "model", "glb", "procedural", "viewer", "ar", "mesh")),
     ("units", ("marla", "kanal", "acre", "sqm", "square", "plot size", "land size")),
+    (
+        "measurement",
+        (
+            "how.*measured",
+            "measured",
+            "measurement quality",
+            "ai camera",
+            "calibrat",
+            "depth",
+            "opencv",
+            "webxr",
+            "manual measurement",
+            "survey",
+            "accuracy",
+        ),
+    ),
     ("how", ("how", "explain", "what is", "tell me")),
 ]
 
@@ -334,6 +350,39 @@ def synthesize_answer(
         )
         if knowledge:
             body += "\n\n(Grounded from local knowledge: style guidance + your project fields.)"
+        return body
+
+    if intent == "measurement":
+        mt = facts.get("measurement_type") or "unknown"
+        quality = facts.get("measurement_quality") or ""
+        cal = facts.get("calibration_method") or ""
+        labels = {
+            "ai_camera": "AI Camera Measurement (OpenCV + Hugging Face depth + user calibration)",
+            "manual": "Manual length × width",
+            "ar": "WebXR / AR hit-test corners",
+        }
+        label = labels.get(str(mt), str(mt))
+        body = (
+            "FACT: Your plot area is {sqm} m² ({marla:.2f} Marla), obtained via {label}.\n"
+            .format(
+                sqm=facts.get("land_size_sqm") or 0,
+                marla=float(facts.get("land_size_marla") or 0),
+                label=label,
+            )
+        )
+        if quality:
+            body += (
+                "ESTIMATE: Measurement quality = {q}. This is a qualitative "
+                "HIGH/MEDIUM/LOW label — not a validated accuracy percentage.\n"
+                .format(q=quality)
+            )
+        if cal:
+            body += "FACT: Calibration method = {0}.\n".format(cal)
+        body += (
+            "LIMITATION: Camera-based and AR measurements are approximate planning "
+            "estimates, not professional land surveys. Verify dimensions manually "
+            "before construction decisions."
+        )
         return body
 
     if intent == "why":

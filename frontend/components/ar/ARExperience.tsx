@@ -9,6 +9,7 @@ import { Vector3 } from "three";
 
 import { HitTestReticle } from "@/components/ar/HitTestReticle";
 import { PlotGizmo } from "@/components/ar/PlotGizmo";
+import { AIMeasurement, type AiMeasureResult } from "@/components/ar/AIMeasurement";
 import {
   ArchViewer,
   HouseRenderer,
@@ -49,12 +50,15 @@ import {
 
 type Phase =
   | "setup"
+  | "ai_camera"
   | "measure"
   | "style"
   | "catalog"
   | "detail"
   | "place"
   | "inspect";
+
+type MeasurementMethod = "manual" | "ar" | "ai_camera";
 
 export default function ARExperience() {
   const router = useRouter();
@@ -72,6 +76,9 @@ export default function ARExperience() {
   const [lengthM, setLengthM] = useState("15");
   const [widthM, setWidthM] = useState("12");
   const [manualSqm, setManualSqm] = useState<number | null>(null);
+  const [measurementMethod, setMeasurementMethod] = useState<MeasurementMethod>("manual");
+  const [measurementQuality, setMeasurementQuality] = useState("");
+  const [calibrationMethod, setCalibrationMethod] = useState("");
   const [styles, setStyles] = useState<ArchStyleCard[]>([]);
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [match, setMatch] = useState<DesignMatchResponse | null>(null);
@@ -150,6 +157,12 @@ export default function ARExperience() {
         widthM: draft.widthM || "12",
         manualSqm: draft.manualSqm,
         preferredStyle: draft.preferredStyle || draft.recommendation.house.style,
+        measurementMethod:
+          draft.points && draft.points.length >= 3
+            ? "ar"
+            : draft.manualSqm != null
+              ? "manual"
+              : "manual",
       });
       if (ok) clearProjectDraft();
     })();
@@ -257,9 +270,23 @@ export default function ARExperience() {
       setError("Enter a realistic length and width in metres.");
       return;
     }
-    setManualSqm(area);
     setPoints([]);
+    setManualSqm(area);
+    setMeasurementMethod("manual");
+    setMeasurementQuality("");
+    setCalibrationMethod("");
     void beginStyleFlow(area);
+  }
+
+  function applyAiCameraResult(result: AiMeasureResult) {
+    setManualSqm(result.area_m2);
+    setPoints(result.world_points);
+    setLandUnits(result.land_units);
+    setMeasurementMethod("ai_camera");
+    setMeasurementQuality(result.quality);
+    setCalibrationMethod(result.calibration_method);
+    setError(null);
+    void beginStyleFlow(result.area_m2);
   }
 
   async function selectStyle(styleId: string) {
@@ -343,6 +370,9 @@ export default function ARExperience() {
     widthM: string;
     manualSqm: number | null;
     preferredStyle?: string | null;
+    measurementMethod: MeasurementMethod;
+    measurementQuality?: string;
+    calibrationMethod?: string;
   }) {
     setBusy(true);
     setError(null);
@@ -360,12 +390,19 @@ export default function ARExperience() {
         input.preferredStyle || selectedStyle || input.recommendation.house.style;
       if (style) form.append("preferred_style", style);
       form.append("plot_points", JSON.stringify(input.points));
-      const isManual = input.points.length === 0 && input.manualSqm != null;
-      form.append("measurement_type", isManual ? "manual" : "ar");
-      if (isManual) {
+      form.append("measurement_type", input.measurementMethod);
+      if (input.measurementQuality) {
+        form.append("measurement_quality", input.measurementQuality);
+      }
+      if (input.calibrationMethod) {
+        form.append("calibration_method", input.calibrationMethod);
+      }
+      if (input.measurementMethod === "manual") {
         form.append("plot_length_m", String(Number(input.lengthM)));
         form.append("plot_width_m", String(Number(input.widthM)));
         form.append("name", `Manual ${Number(input.lengthM)}×${Number(input.widthM)} m`);
+      } else if (input.measurementMethod === "ai_camera") {
+        form.append("name", `AI camera ${input.recommendation.land_units.display_label}`);
       } else {
         form.append("name", `AR plot ${input.recommendation.land_units.display_label}`);
       }
@@ -407,6 +444,9 @@ export default function ARExperience() {
       widthM,
       manualSqm,
       preferredStyle: selectedStyle,
+      measurementMethod,
+      measurementQuality,
+      calibrationMethod,
     });
     if (ok) clearProjectDraft();
   }
@@ -416,6 +456,9 @@ export default function ARExperience() {
     setRecommendation(null);
     setPlaced(null);
     setManualSqm(null);
+    setMeasurementMethod("manual");
+    setMeasurementQuality("");
+    setCalibrationMethod("");
     setStyles([]);
     setSelectedStyle(null);
     setMatch(null);
@@ -460,12 +503,27 @@ export default function ARExperience() {
       onMarkCorner={markCorner}
       onUndo={() => setPoints((p) => p.slice(0, -1))}
       onReset={resetAll}
-      onFinishMeasure={() => void beginStyleFlow(liveArea)}
+      onFinishMeasure={() => {
+        setMeasurementMethod("ar");
+        setMeasurementQuality("");
+        setCalibrationMethod("");
+        void beginStyleFlow(liveArea);
+      }}
       onPlace={placeHouse}
       onSave={() => void saveProject()}
       onLength={setLengthM}
       onWidth={setWidthM}
       onManual={() => applyManualPlot()}
+      onOpenAiCamera={() => {
+        setError(null);
+        setPhase("ai_camera");
+      }}
+      onAiComplete={applyAiCameraResult}
+      onAiCancel={() => setPhase("setup")}
+      onAiManualFallback={() => {
+        setPhase("setup");
+        setError(null);
+      }}
       onResetPlacement={() => {
         setPlaced(null);
         setPhase(sessionActive ? "place" : "detail");
@@ -572,6 +630,10 @@ function Hud(p: {
   onLength: (v: string) => void;
   onWidth: (v: string) => void;
   onManual: () => void;
+  onOpenAiCamera: () => void;
+  onAiComplete: (result: AiMeasureResult) => void;
+  onAiCancel: () => void;
+  onAiManualFallback: () => void;
   onResetPlacement: () => void;
   onSelectStyle: (id: string) => void;
   onChangeStyle: () => void;
@@ -584,6 +646,16 @@ function Hud(p: {
       {p.error}
     </p>
   ) : null;
+
+  if (p.phase === "ai_camera") {
+    return (
+      <AIMeasurement
+        onComplete={p.onAiComplete}
+        onCancel={p.onAiCancel}
+        onManualFallback={p.onAiManualFallback}
+      />
+    );
+  }
 
   if (p.phase === "style") {
     return (
@@ -734,29 +806,21 @@ function Hud(p: {
 
       {!p.sessionActive && p.phase === "setup" && (
         <div className="mt-4 space-y-3">
-          {p.support.kind === "supported" ? (
-            <ol className="list-decimal space-y-1 pl-4 text-[11px] text-stone">
-              <li>Move your phone slowly to detect a surface</li>
-              <li>Wait for the gold ring on the ground</li>
-              <li>Tap corners of the plot in order (3–8 points)</li>
-              <li>Finish → choose style → place the house → walk around</li>
-            </ol>
-          ) : (
-            <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-100">
-              AR is not available on this device/browser. Continue with manual length × width
-              and the 3D Orbit viewer. Physical AR requires Android Chrome + ARCore + HTTPS.
-            </p>
-          )}
+          <p className="text-[11px] uppercase tracking-wide text-stone">Measurement options</p>
           <button
             type="button"
-            onClick={p.onEnterAR}
-            disabled={p.support.kind !== "supported"}
-            className="w-full rounded-xl bg-brass py-3 font-medium text-ink disabled:bg-white/10 disabled:text-stone"
+            onClick={p.onOpenAiCamera}
+            className="w-full rounded-xl bg-brass py-3 font-medium text-ink"
           >
-            {p.support.kind === "supported" ? "Enter AR" : "AR unavailable — use manual below"}
+            AI Camera Measurement
           </button>
+          <p className="text-[11px] leading-snug text-stone">
+            Works on normal Chrome camera — no ARCore / WebXR required. Uses OpenCV + depth model
+            with your known reference length.
+          </p>
+
           <p className="text-center text-[10px] uppercase tracking-wide text-stone">
-            Or measure manually (approximate)
+            Or measure manually (universal fallback)
           </p>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-stone">
@@ -778,7 +842,7 @@ function Hud(p: {
               />
             </label>
           </div>
-          {(Number(p.lengthM) > 0 && Number(p.widthM) > 0) && (
+          {Number(p.lengthM) > 0 && Number(p.widthM) > 0 && (
             <p className="rounded-xl bg-brass/15 px-3 py-2 text-center text-sm text-brass">
               Area ≈ {(Number(p.lengthM) * Number(p.widthM)).toFixed(1)} m²
             </p>
@@ -789,7 +853,31 @@ function Hud(p: {
             disabled={p.busy}
             className="w-full rounded-xl border border-white/15 py-3 text-sm"
           >
-            {p.busy ? "Loading styles…" : "Continue to style choice"}
+            {p.busy ? "Loading styles…" : "Continue with Manual L × W"}
+          </button>
+
+          <p className="text-center text-[10px] uppercase tracking-wide text-stone">
+            Optional WebXR AR
+          </p>
+          {p.support.kind === "supported" ? (
+            <ol className="list-decimal space-y-1 pl-4 text-[11px] text-stone">
+              <li>Move your phone slowly to detect a surface</li>
+              <li>Wait for the gold ring on the ground</li>
+              <li>Tap corners of the plot in order (3–8 points)</li>
+            </ol>
+          ) : (
+            <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-100">
+              WebXR AR is not available on this device/browser. Use AI Camera or Manual measurement.
+              Physical AR requires Android Chrome + ARCore + HTTPS.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={p.onEnterAR}
+            disabled={p.support.kind !== "supported"}
+            className="w-full rounded-xl bg-white/10 py-3 text-sm disabled:text-stone"
+          >
+            {p.support.kind === "supported" ? "Enter AR / WebXR" : "AR unavailable"}
           </button>
         </div>
       )}

@@ -186,7 +186,9 @@ export type Project = {
   land_size_sqm: number;
   plot_length_m?: number | null;
   plot_width_m?: number | null;
-  measurement_type?: "ar" | "manual";
+  measurement_type?: "ar" | "manual" | "ai_camera";
+  measurement_quality?: string;
+  calibration_method?: string;
   land_size_display_unit: string;
   marla?: number | null;
   kanal?: number | null;
@@ -223,6 +225,8 @@ export type HealthResponse = {
   ok: boolean;
   llm_configured: boolean;
   llm_model: string;
+  vision_depth_model?: string;
+  vision_depth_type?: string;
   accuracy_disclaimer?: string;
 };
 

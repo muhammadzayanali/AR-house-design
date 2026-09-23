@@ -121,9 +121,19 @@ class HouseDesign(models.Model):
 class Project(models.Model):
     MEASUREMENT_AR = "ar"
     MEASUREMENT_MANUAL = "manual"
+    MEASUREMENT_AI_CAMERA = "ai_camera"
     MEASUREMENT_CHOICES = (
-        (MEASUREMENT_AR, "AR hit-test"),
+        (MEASUREMENT_AR, "AR hit-test / WebXR"),
         (MEASUREMENT_MANUAL, "Manual rectangle"),
+        (MEASUREMENT_AI_CAMERA, "AI camera measurement"),
+    )
+    QUALITY_HIGH = "HIGH"
+    QUALITY_MEDIUM = "MEDIUM"
+    QUALITY_LOW = "LOW"
+    QUALITY_CHOICES = (
+        (QUALITY_HIGH, "High"),
+        (QUALITY_MEDIUM, "Medium"),
+        (QUALITY_LOW, "Low"),
     )
 
     user = models.ForeignKey(
@@ -139,6 +149,19 @@ class Project(models.Model):
         max_length=16,
         choices=MEASUREMENT_CHOICES,
         default=MEASUREMENT_MANUAL,
+    )
+    measurement_quality = models.CharField(
+        max_length=8,
+        choices=QUALITY_CHOICES,
+        blank=True,
+        default="",
+        help_text="HIGH | MEDIUM | LOW for AI camera; blank for manual/AR",
+    )
+    calibration_method = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="e.g. user_reference | none",
     )
     land_size_display_unit = models.CharField(max_length=16, default="marla")
     marla = models.FloatField(null=True, blank=True)

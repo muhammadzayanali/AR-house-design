@@ -25,6 +25,8 @@ def project_facts(project) -> Dict[str, Any]:
         "plot_length_m": project.plot_length_m,
         "plot_width_m": project.plot_width_m,
         "measurement_type": project.measurement_type,
+        "measurement_quality": getattr(project, "measurement_quality", "") or "",
+        "calibration_method": getattr(project, "calibration_method", "") or "",
         "land_size_marla": project.marla if project.marla is not None else units["marla"],
         "land_size_kanal": project.kanal if project.kanal is not None else units["kanal"],
         "land_size_acre": project.acre if project.acre is not None else units["acre"],

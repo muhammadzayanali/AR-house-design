@@ -113,5 +113,20 @@ class HouseDesignAdmin(admin.ModelAdmin):
     )
 
 
-admin.site.register(Project)
+@admin.register(Project)
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "name",
+        "user",
+        "land_size_sqm",
+        "measurement_type",
+        "measurement_quality",
+        "created_at",
+    )
+    list_filter = ("measurement_type", "measurement_quality")
+    search_fields = ("name", "user__username")
+    readonly_fields = ("created_at", "updated_at")
+
+
 admin.site.register(Report)
