@@ -31,7 +31,12 @@ export type HouseConfig = {
   features?: HouseFeatures;
 };
 
-export function useArchMaterials(style: string, evening: boolean) {
+export function useArchMaterials(
+  style: string,
+  evening: boolean,
+  opts?: { mobileGlass?: boolean },
+) {
+  const mobileGlass = opts?.mobileGlass !== false;
   return useMemo(() => {
     const s = style.toLowerCase();
     const wall = new MeshStandardMaterial({
@@ -71,18 +76,32 @@ export function useArchMaterials(style: string, evening: boolean) {
       metalness: 0.06,
     });
 
-    const glass = new MeshPhysicalMaterial({
-      color: evening ? "#f3dfb8" : "#9ebcd0",
-      transmission: evening ? 0.12 : 0.55,
-      transparent: true,
-      opacity: evening ? 0.9 : 0.55,
-      roughness: 0.08,
-      metalness: 0.15,
-      thickness: 0.35,
-      envMapIntensity: 1.2,
-      emissive: evening ? "#ffc888" : "#000000",
-      emissiveIntensity: evening ? 0.65 : 0,
-    });
+    const glass = new MeshPhysicalMaterial(
+      mobileGlass
+        ? {
+            color: evening ? "#f3dfb8" : "#a8c4d4",
+            transparent: true,
+            opacity: evening ? 0.78 : 0.45,
+            roughness: 0.08,
+            metalness: 0.1,
+            envMapIntensity: 1.25,
+            depthWrite: false,
+            emissive: evening ? "#ffc888" : "#000000",
+            emissiveIntensity: evening ? 0.55 : 0,
+          }
+        : {
+            color: evening ? "#f3dfb8" : "#9ebcd0",
+            transmission: evening ? 0.12 : 0.55,
+            transparent: true,
+            opacity: evening ? 0.9 : 0.55,
+            roughness: 0.08,
+            metalness: 0.15,
+            thickness: 0.35,
+            envMapIntensity: 1.2,
+            emissive: evening ? "#ffc888" : "#000000",
+            emissiveIntensity: evening ? 0.65 : 0,
+          },
+    );
 
     const trim = new MeshStandardMaterial({
       color: "#f4f0e8",
@@ -114,5 +133,5 @@ export function useArchMaterials(style: string, evening: boolean) {
     });
 
     return { wall, accent, roof, glass, trim, dark, grass, water, pave };
-  }, [style, evening]);
+  }, [style, evening, mobileGlass]);
 }

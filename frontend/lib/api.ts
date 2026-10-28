@@ -94,6 +94,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 function formatApiError(data: unknown, status: number) {
   if (data && typeof data === "object") {
     const record = data as Record<string, unknown>;
+    if (typeof record.error === "string") return record.error;
     if (typeof record.detail === "string") return record.detail;
     if (Array.isArray(record.non_field_errors)) {
       return record.non_field_errors.join(" ");

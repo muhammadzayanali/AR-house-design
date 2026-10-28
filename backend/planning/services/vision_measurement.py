@@ -29,6 +29,20 @@ from . import vision_opencv as vcv
 logger = logging.getLogger("planning.vision")
 
 
+class ObstacleBlockedError(ValueError):
+    """Marked polygon intersects non-ground / obstacle pixels."""
+
+    def __init__(self, check: Mapping[str, Any]):
+        super().__init__(
+            str(
+                check.get("message")
+                or "A tree/person was detected inside your marked area — "
+                "please adjust the boundary to exclude it."
+            )
+        )
+        self.check = dict(check)
+
+
 LIMITATIONS = [
     "Approximate camera-based measurement",
     "Not survey-grade",
@@ -45,9 +59,12 @@ def analyse_frame(
     image_bytes: bytes,
     *,
     depth_service=None,
+    segmentation_service=None,
+    run_segmentation: bool = True,
 ) -> Dict[str, Any]:
     """Preprocess one camera frame + run depth estimation + ground plane check."""
     import time
+    from concurrent.futures import ThreadPoolExecutor
 
     t0 = time.perf_counter()
     bgr = vcv.decode_image_bytes(image_bytes)
@@ -72,11 +89,35 @@ def analyse_frame(
 
         depth_service = get_depth_model_service()
 
+    seg_result: Optional[Dict[str, Any]] = None
+
+    def _run_depth():
+        return depth_service.estimate_depth(prep["bgr"])
+
+    def _run_seg():
+        from .segmentation_service import get_segmentation_service
+
+        svc = segmentation_service or get_segmentation_service()
+        return svc.segment_bgr(prep["bgr"])
+
     t1 = time.perf_counter()
+    depth_result = None
+    depth_ok = False
+    depth_error = None
     try:
-        depth_result = depth_service.estimate_depth(prep["bgr"])
+        if run_segmentation:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                fut_d = pool.submit(_run_depth)
+                fut_s = pool.submit(_run_seg)
+                depth_result = fut_d.result()
+                try:
+                    seg_result = fut_s.result()
+                except Exception as exc:
+                    logger.warning("vision.seg.parallel_failed: %s", exc)
+                    seg_result = None
+        else:
+            depth_result = _run_depth()
         depth_ok = True
-        depth_error = None
     except Exception as exc:
         depth_result = None
         depth_ok = False
@@ -122,6 +163,18 @@ def analyse_frame(
 
     depth_payload = None
     session_id = None
+    ground_mask_payload = None
+    seg_viz = None
+    seg_labels: List[Dict[str, Any]] = []
+    if seg_result is not None:
+        from .segmentation_service import pack_ground_mask
+
+        gm = seg_result.get("ground_mask")
+        if gm is not None:
+            ground_mask_payload = pack_ground_mask(np.asarray(gm))
+        seg_viz = seg_result.get("visualization")
+        seg_labels = list(seg_result.get("labels") or [])
+
     if depth_array is not None:
         step = max(1, max(depth_array.shape) // 160)
         small = depth_array[::step, ::step]
@@ -146,6 +199,13 @@ def analyse_frame(
                 "offset": plane.get("offset"),
                 "intrinsics": plane.get("intrinsics"),
                 "inlier_ratio": plane.get("inlier_ratio"),
+            },
+            "ground_mask": ground_mask_payload,
+            "segmentation": {
+                "ok": bool(seg_result.get("ok")) if seg_result else False,
+                "labels": seg_labels,
+                "model": (seg_result or {}).get("model"),
+                "degraded": bool((seg_result or {}).get("degraded")),
             },
         }
         if plane.get("ok"):
@@ -182,6 +242,16 @@ def analyse_frame(
         },
         "depth_visualization": viz,
         "visualization": viz,
+        "segmentation_visualization": seg_viz,
+        "segmentation": {
+            "ok": bool(seg_result.get("ok")) if seg_result else False,
+            "available": seg_result is not None,
+            "labels": seg_labels,
+            "model": (seg_result or {}).get("model"),
+            "degraded": bool((seg_result or {}).get("degraded")),
+            "error": (seg_result or {}).get("error"),
+        },
+        "ground_mask": ground_mask_payload,
         "depth_session": depth_payload,
         "message": message,
         "limitations": list(LIMITATIONS),
@@ -196,7 +266,8 @@ def analyse_frame(
             "Point the camera toward the plot/ground area.",
             "Keep the camera steady.",
             "Avoid very dark or heavily occluded scenes.",
-            "After analysis, select boundary points and enter a known reference length.",
+            "After analysis, select boundary points on clear ground (not trees/people).",
+            "Enter a known reference length between two boundary points.",
         ],
     }
 
@@ -516,6 +587,26 @@ def measure_from_session(
             or "Ground plane was not confident. Re-analyze or use manual measurement."
         )
 
+    # Obstacle-aware gate: block area if polygon hits non-ground
+    obstacle_check: Optional[Dict[str, Any]] = None
+    gm_payload = depth_session.get("ground_mask")
+    if gm_payload:
+        from .segmentation_service import check_polygon_obstacles, unpack_ground_mask
+
+        try:
+            ground_mask = unpack_ground_mask(gm_payload)
+            obstacle_check = check_polygon_obstacles(ground_mask, pts)
+            if obstacle_check.get("blocked"):
+                logger.warning(
+                    "vision.measure.obstacle_blocked offenders=%s",
+                    len(obstacle_check.get("offenders") or []),
+                )
+                raise ObstacleBlockedError(obstacle_check)
+        except ObstacleBlockedError:
+            raise
+        except Exception as exc:
+            logger.warning("vision.measure.obstacle_check_failed: %s", exc)
+
     world = image_points_to_world(pts, depth, plane, depth_type=depth_type)
 
     if "ref_a_index" in calibration and "ref_b_index" in calibration:
@@ -641,6 +732,8 @@ def measure_from_session(
             "known_length_m": known,
             "scale_factor": scale,
         },
+        "obstacles": obstacle_check
+        or {"blocked": False, "offenders": [], "message": None},
         "limitations": list(LIMITATIONS),
         "land_units": units,
     }

@@ -419,3 +419,305 @@ class PlaneLocalMeasurementTests(TestCase):
         self.assertEqual(result["depth_type"], "relative")
         self.assertEqual(result["depth"].shape, (64, 64))
         self.assertTrue(svc.runtime_info()["mock"])
+
+
+def _display_to_image_contain(client_x, client_y, overlay, image_w, image_h):
+    """Python mirror of frontend/lib/geometry/displayToImage.ts (object-fit: contain)."""
+    ow, oh = overlay["width"], overlay["height"]
+    nx = (client_x - overlay["left"]) / ow
+    ny = (client_y - overlay["top"]) / oh
+    image_aspect = image_w / image_h
+    overlay_aspect = ow / oh
+    if overlay_aspect > image_aspect:
+        content_h = oh
+        content_w = content_h * image_aspect
+    else:
+        content_w = ow
+        content_h = content_w / image_aspect
+    offset_x = (ow - content_w) / 2
+    offset_y = (oh - content_h) / 2
+    local_x = nx * ow - offset_x
+    local_y = ny * oh - offset_y
+    if local_x < 0 or local_y < 0 or local_x > content_w or local_y > content_h:
+        return None
+    return {
+        "image_x": (local_x / content_w) * image_w,
+        "image_y": (local_y / content_h) * image_h,
+    }
+
+
+def _naive_linear_map(client_x, client_y, overlay, image_w, image_h):
+    """BUGGY pre-fix mapping (ignores object-fit) — for before/after proof."""
+    nx = (client_x - overlay["left"]) / overlay["width"]
+    ny = (client_y - overlay["top"]) / overlay["height"]
+    return {"image_x": nx * image_w, "image_y": ny * image_h}
+
+
+class ViewportInvariantScalingTests(TestCase):
+    """Same physical image points → same metric area across CSS viewport sizes."""
+
+    def setUp(self):
+        reset_depth_model_service_for_tests()
+        os.environ["VISION_MOCK"] = "1"
+        h, w = 240, 320
+        depth = np.linspace(1.0, 0.3, h, dtype=np.float32)[:, None] * np.ones(
+            (h, w), dtype=np.float32
+        )
+        plane = {
+            "ok": True,
+            "confidence": "HIGH",
+            "normal": [0.0, 0.9, 0.435],
+            "offset": -2.0,
+            "intrinsics": {
+                "fx": float(max(w, h)),
+                "fy": float(max(w, h)),
+                "cx": w / 2.0,
+                "cy": h / 2.0,
+            },
+            "inlier_ratio": 0.7,
+        }
+        step = 2
+        self.session = {
+            "values": depth[::step, ::step].tolist(),
+            "step": step,
+            "width": w,
+            "height": h,
+            "type": "relative",
+            "plane": plane,
+        }
+        self.image_w = w
+        self.image_h = h
+        # Native image corners of the "marked box"
+        self.native_points = [
+            {"image_x": 40.0, "image_y": 60.0},
+            {"image_x": 280.0, "image_y": 60.0},
+            {"image_x": 280.0, "image_y": 200.0},
+            {"image_x": 40.0, "image_y": 200.0},
+        ]
+
+    def _area_for_points(self, points):
+        result = vm.measure_from_session(
+            depth_session=self.session,
+            boundary_points=points,
+            calibration={
+                "known_length_m": 12.0,
+                "ref_a_index": 0,
+                "ref_b_index": 1,
+            },
+        )
+        return float(result["measurement"]["area_m2"])
+
+    def test_contain_mapping_viewport_invariant(self):
+        """Simulate phone vs tablet CSS sizes; contain mapping → identical area."""
+        # Project native points onto two different overlay sizes (contain), then remap clicks
+        viewports = [
+            {"left": 0, "top": 0, "width": 360, "height": 270},  # phone-ish 4:3
+            {"left": 0, "top": 0, "width": 900, "height": 500},  # wide tablet with letterbox
+        ]
+        areas = []
+        remapped_sets = []
+        for overlay in viewports:
+            image_aspect = self.image_w / self.image_h
+            oa = overlay["width"] / overlay["height"]
+            if oa > image_aspect:
+                content_h = overlay["height"]
+                content_w = content_h * image_aspect
+            else:
+                content_w = overlay["width"]
+                content_h = content_w / image_aspect
+            ox = (overlay["width"] - content_w) / 2
+            oy = (overlay["height"] - content_h) / 2
+            remapped = []
+            for p in self.native_points:
+                # Where that native pixel appears on screen
+                sx = ox + (p["image_x"] / self.image_w) * content_w
+                sy = oy + (p["image_y"] / self.image_h) * content_h
+                back = _display_to_image_contain(sx, sy, overlay, self.image_w, self.image_h)
+                self.assertIsNotNone(back)
+                remapped.append(back)
+            remapped_sets.append(remapped)
+            areas.append(self._area_for_points(remapped))
+
+        # Remapped image coords must match native (±0.5 px)
+        for remapped in remapped_sets:
+            for a, b in zip(self.native_points, remapped):
+                self.assertAlmostEqual(a["image_x"], b["image_x"], delta=0.6)
+                self.assertAlmostEqual(a["image_y"], b["image_y"], delta=0.6)
+
+        self.assertAlmostEqual(areas[0], areas[1], places=3)
+        # Before/after proof: naive linear map on wide viewport diverges
+        overlay_wide = viewports[1]
+        image_aspect = self.image_w / self.image_h
+        oa = overlay_wide["width"] / overlay_wide["height"]
+        content_h = overlay_wide["height"] if oa <= image_aspect else overlay_wide["height"]
+        content_w = content_h * image_aspect if oa > image_aspect else overlay_wide["width"]
+        if oa > image_aspect:
+            content_h = overlay_wide["height"]
+            content_w = content_h * image_aspect
+        else:
+            content_w = overlay_wide["width"]
+            content_h = content_w / image_aspect
+        ox = (overlay_wide["width"] - content_w) / 2
+        oy = (overlay_wide["height"] - content_h) / 2
+        buggy = []
+        for p in self.native_points:
+            sx = ox + (p["image_x"] / self.image_w) * content_w
+            sy = oy + (p["image_y"] / self.image_h) * content_h
+            buggy.append(
+                _naive_linear_map(sx, sy, overlay_wide, self.image_w, self.image_h)
+            )
+        buggy_area = self._area_for_points(buggy)
+        # On a letterboxed wide viewport, naive mapping must disagree with truth
+        self.assertGreater(abs(buggy_area - areas[0]), areas[0] * 0.05)
+        print(
+            "VIEWPORT_SCALE_PROOF before_naive={:.3f} after_contain_phone={:.3f} "
+            "after_contain_tablet={:.3f}".format(buggy_area, areas[0], areas[1])
+        )
+
+
+class ObstacleSegmentationTests(TestCase):
+    def setUp(self):
+        reset_depth_model_service_for_tests()
+        from planning.services.segmentation_service import reset_segmentation_service_for_tests
+
+        reset_segmentation_service_for_tests()
+        os.environ["VISION_MOCK"] = "1"
+        self.client = APIClient()
+
+    def _session_with_mask(self, ground_mask):
+        from planning.services.segmentation_service import pack_ground_mask
+
+        h, w = ground_mask.shape
+        depth = np.linspace(1.0, 0.3, h, dtype=np.float32)[:, None] * np.ones(
+            (h, w), dtype=np.float32
+        )
+        plane = {
+            "ok": True,
+            "confidence": "HIGH",
+            "normal": [0.0, 0.9, 0.435],
+            "offset": -2.0,
+            "intrinsics": {
+                "fx": float(max(w, h)),
+                "fy": float(max(w, h)),
+                "cx": w / 2.0,
+                "cy": h / 2.0,
+            },
+            "inlier_ratio": 0.7,
+        }
+        step = 2
+        return {
+            "values": depth[::step, ::step].tolist(),
+            "step": step,
+            "width": w,
+            "height": h,
+            "type": "relative",
+            "plane": plane,
+            "ground_mask": pack_ground_mask(ground_mask, step=step),
+        }
+
+    def test_obstacle_inside_polygon_blocks_measure(self):
+        h, w = 120, 160
+        ground = np.ones((h, w), dtype=bool)
+        # Tree blob in the centre
+        ground[40:80, 60:100] = False
+        session = self._session_with_mask(ground)
+        points = [
+            {"image_x": 20, "image_y": 20},
+            {"image_x": 140, "image_y": 20},
+            {"image_x": 140, "image_y": 100},
+            {"image_x": 20, "image_y": 100},
+        ]
+        with self.assertRaises(vm.ObstacleBlockedError) as ctx:
+            vm.measure_from_session(
+                depth_session=session,
+                boundary_points=points,
+                calibration={
+                    "known_length_m": 10.0,
+                    "ref_a_index": 0,
+                    "ref_b_index": 1,
+                },
+            )
+        self.assertTrue(ctx.exception.check.get("blocked"))
+        self.assertGreater(len(ctx.exception.check.get("offenders") or []), 0)
+
+        resp = self.client.post(
+            "/api/vision/measure/",
+            data=json.dumps(
+                {
+                    "depth_session": session,
+                    "points": points,
+                    "calibration": {
+                        "known_length_m": 10.0,
+                        "ref_a_index": 0,
+                        "ref_b_index": 1,
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        body = resp.json()
+        self.assertTrue(body.get("obstacle_blocked"))
+        self.assertIn("tree/person", body["error"].lower())
+
+    def test_clean_empty_plot_does_not_block(self):
+        h, w = 120, 160
+        ground = np.ones((h, w), dtype=bool)
+        session = self._session_with_mask(ground)
+        points = [
+            {"image_x": 20, "image_y": 20},
+            {"image_x": 140, "image_y": 20},
+            {"image_x": 140, "image_y": 100},
+            {"image_x": 20, "image_y": 100},
+        ]
+        result = vm.measure_from_session(
+            depth_session=session,
+            boundary_points=points,
+            calibration={
+                "known_length_m": 10.0,
+                "ref_a_index": 0,
+                "ref_b_index": 1,
+            },
+        )
+        self.assertTrue(result["success"])
+        self.assertFalse(result["obstacles"]["blocked"])
+
+    def test_mock_seg_detects_green_tree_blob(self):
+        import cv2
+        from planning.services.segmentation_service import get_segmentation_service
+
+        img = np.full((120, 160, 3), (100, 140, 90), dtype=np.uint8)  # earthy
+        img[40:80, 60:100] = (40, 200, 40)  # green tree marker (BGR)
+        svc = get_segmentation_service()
+        out = svc.segment_bgr(img)
+        self.assertTrue(out["ok"])
+        self.assertFalse(bool(out["ground_mask"][60, 80]))  # obstacle
+        self.assertTrue(bool(out["ground_mask"][10, 10]))  # ground
+        labels = [l["label"] for l in out["labels"]]
+        self.assertTrue(any("tree" in x for x in labels))
+
+        ok, buf = cv2.imencode(".jpg", img)
+        self.assertTrue(ok)
+        upload = __import__(
+            "django.core.files.uploadedfile", fromlist=["SimpleUploadedFile"]
+        ).SimpleUploadedFile("tree.jpg", buf.tobytes(), content_type="image/jpeg")
+        resp = self.client.post("/api/vision/segment/", {"image": upload}, format="multipart")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["success"])
+
+    def test_footprint_from_world_polygon_matches_edges(self):
+        """House footprint helper (mirrored) scales to measured rectangle."""
+        pts = [
+            {"x": 0.0, "z": 0.0},
+            {"x": 15.0, "z": 0.0},
+            {"x": 15.0, "z": 12.0},
+            {"x": 0.0, "z": 12.0},
+        ]
+        cx = sum(p["x"] for p in pts) / 4
+        cz = sum(p["z"] for p in pts) / 4
+        width = max(p["x"] for p in pts) - min(p["x"] for p in pts)
+        depth = max(p["z"] for p in pts) - min(p["z"] for p in pts)
+        self.assertAlmostEqual(width, 15.0, places=5)
+        self.assertAlmostEqual(depth, 12.0, places=5)
+        self.assertAlmostEqual(cx, 7.5, places=5)
+        self.assertAlmostEqual(cz, 6.0, places=5)

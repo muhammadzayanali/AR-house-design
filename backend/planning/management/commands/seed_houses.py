@@ -543,6 +543,23 @@ DESIGNS = [
 ]
 
 
+# Map catalog names → authored GLB under /models/houses/ (project-generated).
+# Runtime viewer prefers procedural ModernReferenceHouse / ArchitecturalHouse
+# for quality; GLB paths are recorded for asset pipeline + bbox verification.
+GLB_BY_NAME = {
+    "Modern Compact": "/models/houses/modern-compact.glb",
+    "Modern Family": "/models/houses/modern-family.glb",
+    "Modern Large": "/models/houses/modern-large.glb",
+    "Italian Compact Villa": "/models/houses/italian-compact-villa.glb",
+    "Italian Family Villa": "/models/houses/italian-family-villa.glb",
+    "Cottage Compact": "/models/houses/cottage-compact.glb",
+    "American Family": "/models/houses/american-family.glb",
+    "Contemporary Family": "/models/houses/contemporary-family.glb",
+    "Traditional Family": "/models/houses/traditional-family.glb",
+    "Luxury Villa Large": "/models/houses/luxury-villa-large.glb",
+}
+
+
 class Command(BaseCommand):
     help = "Seed architectural style catalog (procedural Three.js designs)."
 
@@ -557,8 +574,22 @@ class Command(BaseCommand):
         HouseDesign.objects.filter(name__in=legacy).update(active=False)
 
         for row in DESIGNS:
+            data = dict(row)
+            glb = GLB_BY_NAME.get(data["name"])
+            if glb:
+                data["glb_url"] = glb
+                data["model_url"] = glb
+                data["model_width_m"] = data.get("building_width_m")
+                data["model_depth_m"] = data.get("building_depth_m")
+                data["model_height_m"] = data.get("building_height_m")
+                data["source_attribution"] = (
+                    "Plotline FYP — generated architectural massing "
+                    "(not a photoreal scan). See /credits."
+                )
+            # Prefer live procedural massing (ModernReferenceHouse) over vertex-color GLB
+            data["model_type"] = HouseDesign.MODEL_PROCEDURAL
             obj, created = HouseDesign.objects.update_or_create(
-                name=row["name"], defaults=row
+                name=data["name"], defaults=data
             )
             self.stdout.write(("Created" if created else "Updated") + ": " + obj.name)
 

@@ -15,14 +15,14 @@ type XRManager = WebGLRenderer["xr"];
  */
 export const androidArSessionInit: XRSessionInit = {
   requiredFeatures: [],
-  optionalFeatures: ["hit-test", "dom-overlay", "local", "local-floor"],
+  optionalFeatures: ["hit-test", "dom-overlay", "local", "local-floor", "anchors"],
 };
 
 export const xrStore = createXRStore({
   customSessionInit: androidArSessionInit,
   hitTest: true,
   domOverlay: true,
-  anchors: false,
+  anchors: true,
   planeDetection: false,
   meshDetection: false,
   handTracking: false,
@@ -56,20 +56,26 @@ type SessionAttempt = {
 const SESSION_ATTEMPTS: SessionAttempt[] = [
   {
     requiredFeatures: [],
-    optionalFeatures: ["hit-test", "dom-overlay", "local", "local-floor"],
+    optionalFeatures: ["hit-test", "dom-overlay", "local", "local-floor", "anchors"],
     useDomOverlay: true,
     space: "local",
   },
   {
     requiredFeatures: ["hit-test"],
-    optionalFeatures: ["dom-overlay", "local"],
+    optionalFeatures: ["dom-overlay", "local", "anchors"],
     useDomOverlay: true,
     space: "local",
   },
   {
     requiredFeatures: [],
-    optionalFeatures: ["hit-test", "local"],
+    optionalFeatures: ["hit-test", "local", "anchors"],
     useDomOverlay: false,
+    space: "local",
+  },
+  {
+    requiredFeatures: [],
+    optionalFeatures: ["hit-test", "dom-overlay", "local"],
+    useDomOverlay: true,
     space: "local",
   },
   {

@@ -1,13 +1,17 @@
 "use client";
 
 /**
- * AI Camera Measurement — browser camera + Django OpenCV/HF depth.
- * Not WebXR / not "full AR". One frame is uploaded only when the user taps Analyze.
+ * AI Camera Measurement — browser camera + Django OpenCV/HF depth + SegFormer.
+ * Not WebXR / not continuous tracking. One frame is uploaded only when the user taps Analyze.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
+import {
+  displayToImageCoords,
+  imageToDisplayPercent,
+} from "@/lib/geometry/displayToImage";
 import type { LandUnits, WorldPoint } from "@/lib/types";
 
 export type AiMeasureResult = {
@@ -29,12 +33,31 @@ type DepthAnalyseResponse = {
   quality: string;
   depth_visualization?: string | null;
   visualization?: string | null;
+  segmentation_visualization?: string | null;
+  segmentation?: {
+    ok?: boolean;
+    available?: boolean;
+    labels?: Array<{ label: string; is_ground: boolean }>;
+    degraded?: boolean;
+  };
+  ground_mask?: Record<string, unknown> | null;
   depth_session?: Record<string, unknown> | null;
   message?: string;
   ground_plane?: { ok: boolean; confidence?: string; reason?: string };
   error?: string;
   user_action?: string | string[];
   timings_ms?: Record<string, number>;
+};
+
+type SegmentResponse = {
+  success: boolean;
+  width: number;
+  height: number;
+  visualization?: string | null;
+  ground_mask?: Record<string, unknown> | null;
+  labels?: Array<{ label: string; is_ground: boolean }>;
+  degraded?: boolean;
+  error?: string;
 };
 
 type MeasureResponse = {
@@ -57,6 +80,17 @@ type MeasureResponse = {
   land_units: LandUnits;
   error?: string;
   user_action?: string | string[];
+  obstacle_blocked?: boolean;
+  obstacles?: {
+    blocked?: boolean;
+    offenders?: Array<{
+      kind: string;
+      index: number;
+      image_x: number;
+      image_y: number;
+    }>;
+    message?: string;
+  };
 };
 
 type Status =
@@ -76,6 +110,8 @@ type Props = {
   debug?: boolean;
 };
 
+const OBJECT_FIT = "contain" as const;
+
 function actionText(action: string | string[] | undefined): string {
   if (!action) return "";
   return Array.isArray(action) ? action.map((a) => `• ${a}`).join("\n") : action;
@@ -84,24 +120,30 @@ function actionText(action: string | string[] | undefined): string {
 export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [depthViz, setDepthViz] = useState<string | null>(null);
+  const [segViz, setSegViz] = useState<string | null>(null);
   const [depthSession, setDepthSession] = useState<Record<string, unknown> | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quality, setQuality] = useState<string>("");
   const [points, setPoints] = useState<Array<{ image_x: number; image_y: number }>>([]);
   const [frameSize, setFrameSize] = useState({ w: 640, h: 480 });
-  const [knownLength, setKnownLength] = useState("2");
+  const [overlaySize, setOverlaySize] = useState({ width: 1, height: 1 });
+  const [knownLength, setKnownLength] = useState("");
   const [refA, setRefA] = useState(0);
   const [refB, setRefB] = useState(1);
   const [result, setResult] = useState<MeasureResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [timings, setTimings] = useState<Record<string, number> | null>(null);
-  const [mode, setMode] = useState<"preview" | "depth">("preview");
+  const [mode, setMode] = useState<"preview" | "depth" | "seg">("preview");
+  const [offenders, setOffenders] = useState<
+    Array<{ kind: string; index: number; image_x: number; image_y: number }>
+  >([]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -136,7 +178,7 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
         }
         setStatus("camera_ready");
         setHint(
-          "Point the camera toward the plot/ground area. Keep steady. Avoid very dark or heavily occluded scenes.",
+          "Point the camera toward the plot/ground area. Keep steady. Avoid trees/people inside the plot you will mark.",
         );
       } catch {
         setError(
@@ -151,6 +193,19 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     };
   }, [stopCamera]);
 
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0]?.contentRect;
+      if (cr) setOverlaySize({ width: cr.width, height: cr.height });
+    });
+    ro.observe(el);
+    const r = el.getBoundingClientRect();
+    setOverlaySize({ width: r.width, height: r.height });
+    return () => ro.disconnect();
+  }, [status, mode]);
+
   function captureFrameBlob(): Promise<Blob> {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -162,7 +217,6 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     const ctx = canvas.getContext("2d");
     if (!ctx) return Promise.reject(new Error("Canvas unavailable"));
     ctx.drawImage(video, 0, 0, w, h);
-    // Do NOT set frameSize here — after Analyze, taps use working depth size.
     return new Promise((resolve, reject) => {
       canvas.toBlob(
         (blob) => (blob ? resolve(blob) : reject(new Error("Failed to capture frame"))),
@@ -177,14 +231,34 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     setError(null);
     setStatus("analyzing");
     setResult(null);
+    setOffenders([]);
     try {
       const blob = await captureFrameBlob();
-      const form = new FormData();
-      form.append("image", blob, "frame.jpg");
-      const data = await api<DepthAnalyseResponse>("/api/vision/depth/?debug=1", {
-        method: "POST",
-        body: form,
-      });
+      const formDepth = new FormData();
+      formDepth.append("image", blob, "frame.jpg");
+      const formSeg = new FormData();
+      formSeg.append("image", blob, "frame.jpg");
+
+      // Depth (+ in-process seg) and dedicated segment endpoint in parallel
+      const [depthSettled, segSettled] = await Promise.allSettled([
+        api<DepthAnalyseResponse>("/api/vision/depth/?debug=1", {
+          method: "POST",
+          body: formDepth,
+        }),
+        api<SegmentResponse>("/api/vision/segment/", {
+          method: "POST",
+          body: formSeg,
+        }),
+      ]);
+
+      if (depthSettled.status !== "fulfilled") {
+        const reason = depthSettled.reason;
+        throw reason instanceof Error ? reason : new Error("Depth request failed");
+      }
+      const data = depthSettled.value;
+      const seg =
+        segSettled.status === "fulfilled" ? segSettled.value : null;
+
       if (data.timings_ms) setTimings(data.timings_ms);
       if (!data.depth_available) {
         setError(data.error || data.message || "Unable to estimate depth.");
@@ -193,14 +267,19 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
         return;
       }
       setDepthViz(data.depth_visualization || data.visualization || null);
+      setSegViz(
+        seg?.visualization ||
+          data.segmentation_visualization ||
+          null,
+      );
       setDepthSession(data.depth_session || null);
       setSessionId(data.session_id || null);
-      // CRITICAL: taps must match depth/working image size, not raw camera pixels
+      // CRITICAL: taps must match depth/working image size, not CSS pixels
       if (data.width && data.height) {
         setFrameSize({ w: data.width, h: data.height });
       }
       setQuality(data.quality || data.ground_plane?.confidence || "MEDIUM");
-      setMode("depth");
+      setMode(seg?.visualization || data.segmentation_visualization ? "seg" : "depth");
       if (!data.success || data.ground_plane?.ok === false) {
         setError(
           data.message ||
@@ -215,7 +294,7 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
       setPoints([]);
       setStatus("select_points");
       setHint(
-        "Tap boundary corners in order (3–8). Then enter a known real-world length between two of those points (tape measure). Relative depth cannot become metres without this calibration.",
+        "Tap boundary corners on clear ground only (3–8). Red overlay = obstacles (trees/people). Then enter a known real-world length between two points (tape measure).",
       );
     } catch (err) {
       const msg =
@@ -236,9 +315,21 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     if (status !== "select_points" && status !== "calibrating") return;
     if (points.length >= 8) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * frameSize.w;
-    const y = ((e.clientY - rect.top) / rect.height) * frameSize.h;
-    setPoints((prev) => [...prev, { image_x: x, image_y: y }]);
+    const mapped = displayToImageCoords(
+      e.clientX,
+      e.clientY,
+      { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      frameSize.w,
+      frameSize.h,
+      OBJECT_FIT,
+    );
+    if (!mapped) {
+      setHint("Tap on the image area (not the letterbox bars).");
+      return;
+    }
+    setOffenders([]);
+    setError(null);
+    setPoints((prev) => [...prev, mapped]);
   }
 
   async function calculateArea() {
@@ -253,7 +344,7 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     const known = Number(knownLength);
     if (!(known > 0)) {
       setError(
-        "Metric calibration is required before calculating real-world dimensions from relative depth. Enter a known reference length > 0 metres.",
+        "Metric calibration is required. Enter the real-world length (metres) between Ref A and Ref B — do not leave this blank. Relative depth cannot invent metres.",
       );
       return;
     }
@@ -263,6 +354,7 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     }
     setBusy(true);
     setError(null);
+    setOffenders([]);
     try {
       const data = await api<MeasureResponse>("/api/vision/measure/", {
         method: "POST",
@@ -278,20 +370,37 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
           },
         }),
       });
-      if (!data.success) {
-        setError(data.error || "AI Camera Measurement could not complete.");
-        setHint(actionText(data.user_action));
-        setStatus("error");
-        return;
-      }
       setResult(data);
       setStatus("calculated");
       setHint(null);
     } catch (err) {
+      if (err instanceof ApiError && err.body && typeof err.body === "object") {
+        const body = err.body as MeasureResponse;
+        if (body.obstacle_blocked || body.obstacles?.blocked) {
+          setOffenders(body.obstacles?.offenders || []);
+          setError(
+            body.error ||
+              body.obstacles?.message ||
+              "A tree/person was detected inside your marked area — please adjust the boundary to exclude it.",
+          );
+          setHint(actionText(body.user_action));
+          setStatus("select_points");
+          return;
+        }
+        const msg = body.error || err.message;
+        setError(msg);
+        setHint(actionText(body.user_action));
+        setStatus(
+          /calibration|relative depth/i.test(msg) ? "select_points" : "error",
+        );
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Measurement failed";
-      setError(msg.includes("calibration") || msg.includes("relative")
-        ? msg
-        : `AI Camera Measurement could not complete. ${msg}`);
+      setError(
+        msg.includes("calibration") || msg.includes("relative")
+          ? msg
+          : `AI Camera Measurement could not complete. ${msg}`,
+      );
       setStatus("error");
     } finally {
       setBusy(false);
@@ -303,8 +412,11 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
     setDepthSession(null);
     setSessionId(null);
     setDepthViz(null);
+    setSegViz(null);
     setResult(null);
     setError(null);
+    setOffenders([]);
+    setKnownLength("");
     setMode("preview");
     setStatus(streamRef.current ? "camera_ready" : "idle");
     setHint(
@@ -315,13 +427,20 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
   const statusLabel: Record<Status, string> = {
     idle: "Starting camera…",
     camera_ready: "Camera ready",
-    analyzing: "Analyzing scene…",
+    analyzing: "Analyzing depth + obstacles…",
     depth_ready: "Depth estimated",
     select_points: "Select boundary points",
     calibrating: "Set calibration",
     calculated: "Measurement calculated",
     error: "Needs attention",
   };
+
+  const overlayBg =
+    mode === "seg" && segViz
+      ? segViz
+      : mode === "depth" && depthViz
+        ? depthViz
+        : null;
 
   return (
     <div className="mx-auto max-w-md space-y-3 rounded-2xl bg-ink/92 p-4 text-paper shadow-xl ring-1 ring-white/10">
@@ -336,11 +455,12 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
       </div>
 
       <p className="text-[11px] leading-snug text-stone/90">
-        Uses OpenCV + a free Depth Anything V2 Small model on the server. Metric scale comes from
-        your known reference length — not from inventing metres from relative depth. Not survey-grade.
+        One-shot photo: OpenCV + Depth Anything V2 + SegFormer (obstacles). Metric scale comes
+        only from your known reference length. Live phone tracking uses WebXR anchors separately.
       </p>
 
       <div
+        ref={overlayRef}
         className="relative aspect-[4/3] overflow-hidden rounded-xl bg-black ring-1 ring-white/10"
         onClick={onOverlayClick}
         role="presentation"
@@ -349,29 +469,152 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
           ref={videoRef}
           playsInline
           muted
-          className={`h-full w-full object-cover ${mode === "depth" && depthViz ? "opacity-40" : ""}`}
+          className={`h-full w-full object-contain ${overlayBg ? "opacity-35" : ""}`}
         />
-        {mode === "depth" && depthViz ? (
+        {overlayBg ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={depthViz}
-            alt="Depth visualisation"
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-80"
+            src={overlayBg}
+            alt={mode === "seg" ? "Ground / obstacle mask" : "Depth visualisation"}
+            className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-85"
           />
         ) : null}
-        {points.map((p, i) => (
-          <span
-            key={`${p.image_x}-${p.image_y}-${i}`}
-            className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brass ring-2 ring-ink"
-            style={{
-              left: `${(p.image_x / frameSize.w) * 100}%`,
-              top: `${(p.image_y / frameSize.h) * 100}%`,
-            }}
-            title={`P${i + 1}`}
-          />
-        ))}
+        {/* Polygon edges */}
+        {points.length >= 2 ? (
+          <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+            <polyline
+              fill="none"
+              stroke="#b0893e"
+              strokeWidth="2"
+              points={points
+                .map((p) => {
+                  const pct = imageToDisplayPercent(
+                    p.image_x,
+                    p.image_y,
+                    overlaySize,
+                    frameSize.w,
+                    frameSize.h,
+                    OBJECT_FIT,
+                  );
+                  return `${(pct.leftPct / 100) * overlaySize.width},${(pct.topPct / 100) * overlaySize.height}`;
+                })
+                .join(" ")}
+            />
+            {points.length >= 3 ? (
+              <line
+                x1={
+                  (imageToDisplayPercent(
+                    points[points.length - 1].image_x,
+                    points[points.length - 1].image_y,
+                    overlaySize,
+                    frameSize.w,
+                    frameSize.h,
+                    OBJECT_FIT,
+                  ).leftPct /
+                    100) *
+                  overlaySize.width
+                }
+                y1={
+                  (imageToDisplayPercent(
+                    points[points.length - 1].image_x,
+                    points[points.length - 1].image_y,
+                    overlaySize,
+                    frameSize.w,
+                    frameSize.h,
+                    OBJECT_FIT,
+                  ).topPct /
+                    100) *
+                  overlaySize.height
+                }
+                x2={
+                  (imageToDisplayPercent(
+                    points[0].image_x,
+                    points[0].image_y,
+                    overlaySize,
+                    frameSize.w,
+                    frameSize.h,
+                    OBJECT_FIT,
+                  ).leftPct /
+                    100) *
+                  overlaySize.width
+                }
+                y2={
+                  (imageToDisplayPercent(
+                    points[0].image_x,
+                    points[0].image_y,
+                    overlaySize,
+                    frameSize.w,
+                    frameSize.h,
+                    OBJECT_FIT,
+                  ).topPct /
+                    100) *
+                  overlaySize.height
+                }
+                stroke="#b0893e"
+                strokeWidth="2"
+                strokeDasharray="4 3"
+              />
+            ) : null}
+          </svg>
+        ) : null}
+        {points.map((p, i) => {
+          const pct = imageToDisplayPercent(
+            p.image_x,
+            p.image_y,
+            overlaySize,
+            frameSize.w,
+            frameSize.h,
+            OBJECT_FIT,
+          );
+          return (
+            <span
+              key={`${p.image_x}-${p.image_y}-${i}`}
+              className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brass ring-2 ring-ink"
+              style={{ left: `${pct.leftPct}%`, top: `${pct.topPct}%` }}
+              title={`P${i + 1}`}
+            />
+          );
+        })}
+        {offenders.map((o, i) => {
+          const pct = imageToDisplayPercent(
+            o.image_x,
+            o.image_y,
+            overlaySize,
+            frameSize.w,
+            frameSize.h,
+            OBJECT_FIT,
+          );
+          return (
+            <span
+              key={`off-${i}-${o.image_x}`}
+              className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500 ring-2 ring-red-200"
+              style={{ left: `${pct.leftPct}%`, top: `${pct.topPct}%` }}
+              title="Obstacle"
+            />
+          );
+        })}
         <canvas ref={canvasRef} className="hidden" />
       </div>
+
+      {(depthViz || segViz) && status !== "camera_ready" && status !== "idle" ? (
+        <div className="flex gap-2 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setMode("depth")}
+            className={`rounded-lg px-2 py-1 ${mode === "depth" ? "bg-brass text-ink" : "bg-white/10"}`}
+          >
+            Depth
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("seg")}
+            disabled={!segViz}
+            className={`rounded-lg px-2 py-1 disabled:opacity-40 ${mode === "seg" ? "bg-brass text-ink" : "bg-white/10"}`}
+          >
+            Ground / obstacles
+          </button>
+        </div>
+      ) : null}
 
       {hint ? <p className="text-[11px] text-stone">{hint}</p> : null}
       {error ? (
@@ -405,9 +648,6 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
               Edge lengths (m): {result.edge_lengths_m.map((e) => e.toFixed(2)).join(" · ")}
             </p>
           ) : null}
-          <p className="mt-1 text-[10px] text-stone/80">
-            Check laptop Django logs for `planning.vision` diagnostics.
-          </p>
         </div>
       ) : null}
 
@@ -419,7 +659,8 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
               value={knownLength}
               onChange={(e) => setKnownLength(e.target.value)}
               inputMode="decimal"
-              className="mt-1 w-full rounded-lg bg-white/10 px-2 py-2 text-paper"
+              placeholder="e.g. 15"
+              className="mt-1 w-full rounded-lg bg-white/10 px-2 py-2 text-paper placeholder:text-stone/50"
             />
           </label>
           <div className="grid grid-cols-2 gap-1">
@@ -447,8 +688,8 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
             </label>
           </div>
           <p className="col-span-2 text-[10px] text-stone">
-            Points: {points.length}/8 — Ref A/B are 0-based indices of boundary taps whose real
-            distance equals the known length.
+            Points: {points.length}/8 — enter the real tape-measure distance between Ref A and Ref B
+            (0-based indices). Leaving this empty blocks metric area.
           </p>
         </div>
       )}
@@ -466,6 +707,7 @@ export function AIMeasurement({ onComplete, onCancel, onManualFallback, debug }:
           type="button"
           onClick={() => {
             setPoints((p) => p.slice(0, -1));
+            setOffenders([]);
           }}
           disabled={points.length === 0}
           className="rounded-xl bg-white/10 py-3 text-sm disabled:opacity-40"

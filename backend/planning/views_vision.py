@@ -1,6 +1,7 @@
 """AI camera measurement API views.
 
 POST /api/vision/depth/   — one frame → depth + plane quality (no continuous upload)
+POST /api/vision/segment/ — one frame → ADE20K SegFormer ground/obstacle mask
 POST /api/vision/measure/ — depth session + points + calibration → area m²
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ from rest_framework.views import APIView
 
 from .services import vision_measurement as vm
 from .services.depth_model_service import get_depth_model_service
+from .services.segmentation_service import get_segmentation_service
 from .services.vision_opencv import OpenCVUnavailable
 
 logger = logging.getLogger("planning.vision")
@@ -129,6 +131,82 @@ class VisionDepthView(APIView):
             )
 
 
+class VisionSegmentView(APIView):
+    """One-shot ADE20K segmentation → ground mask (obstacle awareness)."""
+
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        svc = get_segmentation_service()
+        return Response(
+            {
+                "ok": True,
+                "feature": "obstacle_aware_segmentation",
+                "model": svc.model_id,
+                "runtime": svc.runtime_info(),
+                "note": (
+                    "Classifies ADE20K pixels into GROUND vs OBSTACLE. "
+                    "Does not invent plot boundaries — user adjusts marks."
+                ),
+            }
+        )
+
+    def post(self, request):
+        try:
+            from .services import vision_opencv as vcv
+            from .services.segmentation_service import pack_ground_mask
+
+            image_bytes = _image_bytes_from_request(request)
+            bgr = vcv.decode_image_bytes(image_bytes)
+            prep = vcv.preprocess_frame(bgr)
+            svc = get_segmentation_service()
+            result = svc.segment_bgr(prep["bgr"])
+            gm = result.get("ground_mask")
+            packed = pack_ground_mask(gm) if gm is not None else None
+            logger.info(
+                "vision.api.segment_response ok=%s labels=%s",
+                result.get("ok"),
+                len(result.get("labels") or []),
+            )
+            return Response(
+                {
+                    "success": bool(result.get("ok")),
+                    "width": prep["working_size"][0],
+                    "height": prep["working_size"][1],
+                    "ground_mask": packed,
+                    "labels": result.get("labels") or [],
+                    "visualization": result.get("visualization"),
+                    "model": result.get("model"),
+                    "mock": bool(result.get("mock")),
+                    "degraded": bool(result.get("degraded")),
+                    "error": result.get("error"),
+                    "runtime": svc.runtime_info(),
+                },
+                status=status.HTTP_200_OK,
+            )
+        except OpenCVUnavailable as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except ValueError as exc:
+            return Response(
+                {"success": False, "error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            logger.exception("vision.api.segment_failed: %s", exc)
+            return Response(
+                {
+                    "success": False,
+                    "error": "Segmentation failed: {0}".format(exc),
+                    "user_action": "Retry Analyze, or continue carefully and use Manual Measurement.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+
 class VisionMeasureView(APIView):
     """Convert boundary taps + calibration + depth session → plot area."""
 
@@ -203,6 +281,26 @@ class VisionMeasureView(APIView):
                 result.get("edge_lengths_m"),
             )
             return Response(result, status=status.HTTP_200_OK)
+        except vm.ObstacleBlockedError as exc:
+            check = exc.check or {}
+            logger.warning(
+                "vision.api.measure_obstacle_blocked offenders=%s",
+                len(check.get("offenders") or []),
+            )
+            return Response(
+                {
+                    "success": False,
+                    "obstacle_blocked": True,
+                    "error": str(exc),
+                    "obstacles": check,
+                    "user_action": check.get("user_action")
+                    or [
+                        "Move boundary points off trees, people, cars, and walls",
+                        "Keep the polygon on clear ground only",
+                    ],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except ValueError as exc:
             msg = str(exc)
             logger.warning("vision.api.measure_rejected: %s", msg)

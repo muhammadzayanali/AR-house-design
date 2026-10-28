@@ -7,13 +7,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Vector3 } from "three";
 
+import { AnchoredHouse } from "@/components/ar/AnchoredHouse";
 import { HitTestReticle } from "@/components/ar/HitTestReticle";
 import { PlotGizmo } from "@/components/ar/PlotGizmo";
 import { AIMeasurement, type AiMeasureResult } from "@/components/ar/AIMeasurement";
-import {
-  ArchViewer,
-  HouseRenderer,
-} from "@/components/architecture/ArchViewer";
+import { ArchViewer } from "@/components/architecture/ArchViewer";
+import { footprintFromWorldPolygon } from "@/lib/geometry/displayToImage";
 import {
   DesignCatalog,
   StylePicker,
@@ -478,6 +477,20 @@ export default function ARExperience() {
   const showPreview =
     !sessionActive && recommendation && (phase === "detail" || phase === "inspect");
 
+  const previewFootprint = useMemo(() => {
+    if (points.length >= 3) return footprintFromWorldPolygon(points);
+    if (manualSqm != null && Number(lengthM) > 0 && Number(widthM) > 0) {
+      return {
+        width: Number(lengthM),
+        depth: Number(widthM),
+        yaw: 0,
+        centerX: 0,
+        centerZ: 0,
+      };
+    }
+    return null;
+  }, [points, manualSqm, lengthM, widthM]);
+
   const hud = (
     <Hud
       support={support}
@@ -544,6 +557,11 @@ export default function ARExperience() {
           <ArchViewer
             design={recommendation.house}
             className="h-full w-full"
+            footprintOverride={
+              previewFootprint
+                ? { width: previewFootprint.width, depth: previewFootprint.depth }
+                : undefined
+            }
           />
         </div>
       )}
@@ -574,9 +592,11 @@ export default function ARExperience() {
           <HitTestReticle hitRef={hitRef} visible={sessionActive && !placed} />
           <PlotGizmo points={points} />
           {recommendation && placed && (
-            <group position={[placed.x, placed.y, placed.z]}>
-              <HouseRenderer design={recommendation.house} />
-            </group>
+            <AnchoredHouse
+              design={recommendation.house}
+              placeAt={placed}
+              plotPoints={points}
+            />
           )}
           {sessionActive && (
             <XRDomOverlay

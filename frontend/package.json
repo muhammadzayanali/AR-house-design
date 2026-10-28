@@ -9,6 +9,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "generate:models": "python3 ../scripts/generate_house_glbs.py",
+    "optimize:models": "node ../scripts/optimize-models.mjs",
+    "verify:models": "node ../scripts/verify-model-bbox.mjs",
     "test:e2e": "playwright test",
     "test:e2e:api": "API_BASE=http://127.0.0.1:8000 playwright test e2e/planning-flow.spec.ts -g API"
   },

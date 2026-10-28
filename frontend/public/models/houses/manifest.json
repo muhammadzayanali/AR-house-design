@@ -1,0 +1,273 @@
+{
+  "version": 1,
+  "conventions": {
+    "units": "metres",
+    "origin": "centre of base footprint",
+    "ground": "y=0",
+    "up": "+Y",
+    "facing": "+Z"
+  },
+  "note": "All listed models are project-generated architectural massing (Plotline FYP). No unlicensed third-party house meshes are shipped. Modern look targets docs/reference/house-reference.png as a quality bar only.",
+  "models": [
+    {
+      "id": "modern-compact",
+      "name": "Modern Compact",
+      "style": "Modern",
+      "glb": "/models/houses/modern-compact.glb",
+      "footprint_m": {
+        "width": 9,
+        "depth": 8
+      },
+      "height_m": 4.2,
+      "floors": 1,
+      "bedrooms": 2,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing (Three.js / Python exporter)",
+      "generated": true,
+      "triangles": 216,
+      "file_size_kb": 17.4,
+      "bbox_span_m": {
+        "width": 11.4,
+        "depth": 11.2,
+        "height": 3.7
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "modern-family",
+      "name": "Modern Family",
+      "style": "Modern",
+      "glb": "/models/houses/modern-family.glb",
+      "footprint_m": {
+        "width": 11,
+        "depth": 10
+      },
+      "height_m": 7.5,
+      "floors": 2,
+      "bedrooms": 3,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing inspired by reference quality bar (not a scan)",
+      "generated": true,
+      "triangles": 348,
+      "file_size_kb": 27.5,
+      "bbox_span_m": {
+        "width": 13.4,
+        "depth": 13.25,
+        "height": 6.944
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "modern-large",
+      "name": "Modern Large",
+      "style": "Modern",
+      "glb": "/models/houses/modern-large.glb",
+      "footprint_m": {
+        "width": 14,
+        "depth": 12
+      },
+      "height_m": 8.5,
+      "floors": 2,
+      "bedrooms": 4,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 348,
+      "file_size_kb": 27.5,
+      "bbox_span_m": {
+        "width": 16.4,
+        "depth": 15.25,
+        "height": 6.944
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "italian-compact-villa",
+      "name": "Italian Compact Villa",
+      "style": "Italian Villa",
+      "glb": "/models/houses/italian-compact-villa.glb",
+      "footprint_m": {
+        "width": 10,
+        "depth": 9
+      },
+      "height_m": 7.0,
+      "floors": 2,
+      "bedrooms": 3,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 196,
+      "file_size_kb": 15.9,
+      "bbox_span_m": {
+        "width": 11.5,
+        "depth": 10.5,
+        "height": 8.28
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "italian-family-villa",
+      "name": "Italian Family Villa",
+      "style": "Italian Villa",
+      "glb": "/models/houses/italian-family-villa.glb",
+      "footprint_m": {
+        "width": 12,
+        "depth": 11
+      },
+      "height_m": 8.0,
+      "floors": 2,
+      "bedrooms": 4,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 196,
+      "file_size_kb": 15.9,
+      "bbox_span_m": {
+        "width": 13.5,
+        "depth": 12.5,
+        "height": 8.28
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "cottage-compact",
+      "name": "Cottage Compact",
+      "style": "Cottage / Hut",
+      "glb": "/models/houses/cottage-compact.glb",
+      "footprint_m": {
+        "width": 8,
+        "depth": 7
+      },
+      "height_m": 5.5,
+      "floors": 1,
+      "bedrooms": 2,
+      "parking": false,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 100,
+      "file_size_kb": 8.6,
+      "bbox_span_m": {
+        "width": 9.5,
+        "depth": 8.5,
+        "height": 4.78
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "american-family",
+      "name": "American Family",
+      "style": "American",
+      "glb": "/models/houses/american-family.glb",
+      "footprint_m": {
+        "width": 13,
+        "depth": 10
+      },
+      "height_m": 7.5,
+      "floors": 2,
+      "bedrooms": 3,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 172,
+      "file_size_kb": 14.1,
+      "bbox_span_m": {
+        "width": 14.5,
+        "depth": 11.5,
+        "height": 8.28
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "contemporary-family",
+      "name": "Contemporary Family",
+      "style": "Contemporary",
+      "glb": "/models/houses/contemporary-family.glb",
+      "footprint_m": {
+        "width": 12,
+        "depth": 10
+      },
+      "height_m": 7.8,
+      "floors": 2,
+      "bedrooms": 3,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 348,
+      "file_size_kb": 27.5,
+      "bbox_span_m": {
+        "width": 14.4,
+        "depth": 13.25,
+        "height": 6.944
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "traditional-family",
+      "name": "Traditional Family",
+      "style": "Traditional",
+      "glb": "/models/houses/traditional-family.glb",
+      "footprint_m": {
+        "width": 11,
+        "depth": 10
+      },
+      "height_m": 7.2,
+      "floors": 2,
+      "bedrooms": 3,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 172,
+      "file_size_kb": 14.1,
+      "bbox_span_m": {
+        "width": 12.5,
+        "depth": 11.5,
+        "height": 8.28
+      },
+      "bbox_ok": true
+    },
+    {
+      "id": "luxury-villa-large",
+      "name": "Luxury Villa Large",
+      "style": "Luxury Villa",
+      "glb": "/models/houses/luxury-villa-large.glb",
+      "footprint_m": {
+        "width": 16,
+        "depth": 14
+      },
+      "height_m": 9.0,
+      "floors": 2,
+      "bedrooms": 5,
+      "parking": true,
+      "license": "project-generated",
+      "source": "plotline-procedural",
+      "attribution": "Plotline FYP \u2014 generated architectural massing",
+      "generated": true,
+      "triangles": 348,
+      "file_size_kb": 27.5,
+      "bbox_span_m": {
+        "width": 18.4,
+        "depth": 17.25,
+        "height": 6.944
+      },
+      "bbox_ok": true
+    }
+  ]
+}

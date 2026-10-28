@@ -2,34 +2,41 @@
 
 ## Primary strategy (this FYP)
 
-**Procedural architectural generator** built with Three.js / React Three Fiber / drei.
+**Generated architectural massing** in Three.js / React Three Fiber:
 
-- No live third-party download API at runtime
-- Configured via `HouseDesign.model_config` JSON
-- `model_type = procedural` (default)
+- **Modern / Contemporary / Luxury** → `ModernReferenceHouse` (cantilever, parapets, framed glazing, glass rail, interior silhouettes) aimed at `docs/reference/house-reference.png` as a *quality bar* (reference image is not shipped as a model).
+- **Italian / Cottage / American / Traditional** → `ArchitecturalHouse` pitched/portico massing.
+- UI label: **“Generated massing model”** — never presented as a photoreal scan.
+- Configured via `HouseDesign.model_config` JSON; `model_type = procedural` by default.
 
-## Optional GLB path
+## Authored GLB exports
 
-`model_type = glb` + `glb_url` / `model_url` pointing at local `/models/*.glb`.
+Each design also has a metre-true `.glb` under `frontend/public/models/houses/` plus metadata in `frontend/lib/houses/manifest.json`.
 
-Existing massing files remain available as optional GLB entries but are **not** the primary catalog presentation.
+```bash
+python3 scripts/generate_house_glbs.py   # write GLBs + update manifest stats
+cd frontend && npm run verify:models     # bbox vs footprint metadata
+cd frontend && npm run optimize:models   # @gltf-transform meshopt (optional)
+```
 
-## Sketchfab / external marketplaces
+Conventions: metres, origin at footprint centre, y=0 ground, +Y up, facing +Z.
 
 | Item | Detail |
 |---|---|
-| Provider | Sketchfab Download API |
-| Auth | User OAuth required for downloads |
-| Formats | GLB / glTF ZIP |
-| Runtime | **Not used** — would require per-user auth |
-| Future | Admin one-time import into `frontend/public/models/` with license fields |
+| License | `project-generated` |
+| Source | `plotline-procedural` |
+| Attribution | See `/credits` |
 
-## Licensing fields on HouseDesign
+## Licensing honesty
 
-`source_provider`, `source_model_id`, `source_license`, `source_attribution`, `commercial_use_allowed`, `attribution_required`.
+**No unlicensed Sketchfab/commercial house meshes are shipped.** CC0 photoreal houses matching the Modern reference are not available as drop-in assets without authoring in Blender. If you later export Blender GLBs, place them in `/public/models/houses/`, set `model_type=glb`, and update the manifest license/attribution fields.
 
-Procedural designs: `source_provider=plotline-procedural`, `source_license=project-generated`.
+## Viewer / AR
+
+- Viewer: ACESFilmic tone mapping, sRGB, ContactShadows, DPR capped, mobile glass without transmission.
+- AR: same `HouseRenderer` at 1:1 scale via WebXR **anchors** + `ShadowMaterial` ground catcher (`AnchoredHouse`).
+- Draco decoders self-hosted at `/public/draco/gltf/`.
 
 ## Fallback
 
-If GLB fails to load → wireframe error boundary → optional procedural rebuild from `model_config`.
+If a GLB fails to load → procedural `ArchitecturalHouse` / `ModernReferenceHouse` from `model_config` (no wireframe placeholder box).

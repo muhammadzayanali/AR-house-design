@@ -14,9 +14,9 @@
 [build.environment]
   NODE_VERSION = "20"
   # Browser API → tunnel. Media <img> uses /api/media-proxy (same origin) → tunnel.
-  # Keep subdomain fixed: npx -y localtunnel --port 8000 --subdomain late-zebras-end
-  NEXT_PUBLIC_API_ORIGIN = "https://late-zebras-end.loca.lt"
-  DJANGO_ORIGIN = "https://late-zebras-end.loca.lt"
+  # Cloudflare quick tunnel (URL changes on restart): ./.tools/cloudflared tunnel --url http://127.0.0.1:8000
+  NEXT_PUBLIC_API_ORIGIN = "https://requiring-provider-distributed-moisture.trycloudflare.com"
+  DJANGO_ORIGIN = "https://requiring-provider-distributed-moisture.trycloudflare.com"
 
 # Allow WebXR / camera for immersive AR on Android Chrome.
 [[headers]]

@@ -5,6 +5,7 @@ import { ExtrudeGeometry, MeshStandardMaterial, Shape, type Material } from "thr
 
 import type { HouseConfig } from "./materials";
 import { useArchMaterials } from "./materials";
+import { ModernReferenceHouse } from "./ModernReferenceHouse";
 
 function Box({
   position,
@@ -201,21 +202,52 @@ function Tree({ x, z, trunk, canopy }: { x: number; z: number; trunk: Material; 
 
 /**
  * Procedural architectural house — metres, origin at footprint centre, y=0 ground.
- * Built for convincing real-time visualization (not photoreal CGI).
+ * Modern style uses ModernReferenceHouse (reference-quality massing).
+ * Other styles: clean architectural massing — UI labels as "Generated massing model".
  */
 export function ArchitecturalHouse({
   config,
   evening = false,
+  mobileGlass = true,
 }: {
   config: HouseConfig;
   evening?: boolean;
+  mobileGlass?: boolean;
 }) {
   const style = String(config.style || "modern").toLowerCase();
   const floors = Math.max(1, Number(config.floors) || 2);
-  const w = Math.max(7, Number(config.footprint?.width) || 10);
-  const d = Math.max(7, Number(config.footprint?.depth) || 10);
+  // Allow measured footprints below the old 7 m clamp (AI camera / small plots).
+  const w = Math.max(0.5, Number(config.footprint?.width) || 10);
+  const d = Math.max(0.5, Number(config.footprint?.depth) || 10);
   const features = config.features || {};
-  const mats = useArchMaterials(style, evening);
+  const mats = useArchMaterials(style, evening, { mobileGlass });
+
+  if (
+    style.includes("modern") ||
+    style.includes("contemporary") ||
+    style.includes("luxury")
+  ) {
+    return (
+      <ModernReferenceHouse
+        config={{
+          ...config,
+          style: style.includes("luxury")
+            ? "luxury"
+            : style.includes("contemporary")
+              ? "contemporary"
+              : "modern",
+          features: {
+            ...features,
+            cantilever: features.cantilever ?? true,
+            terrace: features.terrace ?? true,
+            balcony: features.balcony ?? true,
+          },
+        }}
+        evening={evening}
+        mobileGlass={mobileGlass}
+      />
+    );
+  }
 
   const shutter = useMemo(
     () =>

@@ -31,13 +31,19 @@ export default function HomePage() {
             >
               Saved projects
             </Link>
+            <Link
+              href="/credits"
+              className="rounded-full border border-ink/15 px-6 py-3 text-sm"
+            >
+              3D credits
+            </Link>
           </div>
         </div>
         <ol className="space-y-4 rounded-3xl bg-white/50 p-6 ring-1 ring-ink/10">
           {[
             ["1. Measure", "AI Camera, Manual L×W, or optional WebXR. Area uses deterministic geometry (shoelace), not an LLM."],
             ["2. Recommend", "Plot size is matched to HouseDesign min/max ranges. No trained model."],
-            ["3. Visualize", "Procedural 3D massing on the plot. Unsupported browsers get OrbitControls."],
+            ["3. Visualize", "Metre-true generated architectural massing in Three.js (Modern matches the reference quality bar). AR uses WebXR anchors."],
             ["4. Narrate", "Llama or Qwen turns the saved JSON into a report and answers questions."],
           ].map(([title, body]) => (
             <li key={title}>
