@@ -114,9 +114,15 @@ class ModelErrorBoundary extends Component<
   }
 }
 
-export function ModelLoadProgress({ className }: { className?: string }) {
+export function ModelLoadProgress({
+  className,
+  enabled = true,
+}: {
+  className?: string;
+  enabled?: boolean;
+}) {
   const { active, progress } = useProgress();
-  if (!active) return null;
+  if (!enabled || !active || progress <= 0) return null;
   return (
     <div
       className={

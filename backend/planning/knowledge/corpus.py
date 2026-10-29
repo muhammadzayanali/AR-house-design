@@ -161,8 +161,59 @@ CORPUS: List[Dict[str, str]] = [
         "source_type": "planning_guidance",
         "text": (
             "Estimated cost fields on HouseDesign are preliminary planning ESTIMATES in PKR "
-            "(min/max when available). They are catalog estimates, not quotations, BOQs, "
-            "or contractor bids. Use them only to compare order-of-magnitude between designs."
+            "(min/max when available). They are catalog construction estimates, not quotations, "
+            "BOQs, or contractor bids. The band is building work only. It does not include "
+            "LDA tax, map-approval challan, DHA or society fees, stamp duty, transfer tax, "
+            "yearly property tax, or WAPDA, SNGPL, and WASA connection deposits."
+        ),
+    },
+    {
+        "id": "cost-inclusions",
+        "title": "What the cost estimate includes and excludes",
+        "tags": "cost included excluded include lda tax fee challan approval construction estimate",
+        "category": "planning",
+        "source_type": "planning_guidance",
+        "text": (
+            "The project cost band is a preliminary construction estimate for the house "
+            "(structure and finishes at a Lahore reference rate, or the catalog min–max). "
+            "It is not a contractor quote. It does not include authority charges: "
+            "LDA or MCL building-plan fee, DHA or Cantonment or society map fee, "
+            "stamp duty, withholding or transfer tax on the plot, yearly property tax, "
+            "or utility connection deposits (WAPDA, SNGPL, WASA). "
+            "Ask about LDA tax to see the separate map-fee illustration."
+        ),
+    },
+    {
+        "id": "lda-map-fee",
+        "title": "LDA tax and building-plan fee",
+        "tags": "lda tax fee challan map approval naksha naqsha lahore development authority included excluded",
+        "category": "planning",
+        "source_type": "planning_guidance",
+        "text": (
+            "LDA tax, in homeowner speech, usually means the Lahore Development Authority "
+            "building-plan (map / naqsha) approval fee paid by challan. It is not part of "
+            "Plotline's construction estimate. A published residential reference is about "
+            "PKR 15 per square foot of covered area: Dawn reported LDA raising the "
+            "residential plan fee from Rs 5 to Rs 15 per sq ft (commercial Rs 40). "
+            "City42, 24 June 2024, reported the Metropolitan Corporation Lahore gazette "
+            "raising the residential map fee from Rs 4 to Rs 15 per sq ft from 1 July 2024. "
+            "DHA, RUDA, a cantonment board, or a private society may charge a different fee; "
+            "LDA rates do not apply there. This is not a challan. Confirm the current "
+            "schedule on lda.gop.pk or with the authority that actually controls the plot."
+        ),
+    },
+    {
+        "id": "other-charges",
+        "title": "Other charges outside the construction estimate",
+        "tags": "stamp duty property tax withholding wapda sui gas wasa transfer fee not included",
+        "category": "planning",
+        "source_type": "planning_guidance",
+        "text": (
+            "Stamp duty and transfer charges are paid when the plot changes hands; they are "
+            "not in the house construction estimate. Yearly property tax is billed separately "
+            "by the excise or local tax office. Electricity (WAPDA/LESCO), gas (SNGPL), and "
+            "water (WASA) connection deposits are also separate. Plotline does not calculate "
+            "those bills."
         ),
     },
     {

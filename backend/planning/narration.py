@@ -48,6 +48,8 @@ def project_facts(project) -> Dict[str, Any]:
             {
                 "house_name": house.name,
                 "house_style": house.style,
+                "house_description": house.description or "",
+                "building_height_m": house.building_height_m,
                 "bedrooms": house.bedrooms,
                 "bathrooms": house.bathrooms,
                 "floors": house.floors,
@@ -131,6 +133,21 @@ def answer_question(facts: Dict[str, Any], question: str) -> Dict[str, Any]:
     rag = local_rag.answer(facts, question)
     passages = rag.get("passages") or []
     debug = rag.get("debug") or {}
+    # Fee answers stay on the local text so a polish pass cannot fold LDA tax
+    # back into the construction estimate.
+    if rag.get("intent") in ("fees", "authority", "build"):
+        debug = {**debug, "hf_used": False, "synthesis_source": "local_rag"}
+        return {
+            "text": rag["text"],
+            "source": "local_rag",
+            "model": rag.get("model"),
+            "warning": None,
+            "passages": passages,
+            "intent": rag.get("intent"),
+            "grounded": grounded,
+            "debug": debug,
+            "validation": {"ok": True, "reason": "fees_local"},
+        }
 
     hf_result = hf.answer_question(
         facts,

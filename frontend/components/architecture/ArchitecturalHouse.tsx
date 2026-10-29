@@ -209,10 +209,12 @@ export function ArchitecturalHouse({
   config,
   evening = false,
   mobileGlass = true,
+  plotPolygon,
 }: {
   config: HouseConfig;
   evening?: boolean;
   mobileGlass?: boolean;
+  plotPolygon?: Array<{ x: number; z: number }>;
 }) {
   const style = String(config.style || "modern").toLowerCase();
   const floors = Math.max(1, Number(config.floors) || 2);
@@ -245,6 +247,7 @@ export function ArchitecturalHouse({
         }}
         evening={evening}
         mobileGlass={mobileGlass}
+        plotPolygon={plotPolygon}
       />
     );
   }

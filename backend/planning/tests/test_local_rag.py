@@ -69,6 +69,84 @@ class LocalRagTests(TestCase):
         self.assertIn("14,000,000", result["text"])
         self.assertIn("19,000,000", result["text"])
 
+    def test_lda_tax_not_in_construction_cost(self):
+        facts = _italian_facts()
+        facts.update(
+            {
+                "house_name": "Italian Family Villa",
+                "estimated_cost_min": 20_000_000,
+                "estimated_cost_max": 28_000_000,
+                "estimated_cost_pkr": 24_000_000,
+                "floors": 2,
+                "building_footprint_sqm": 132,
+                "feasibility": {
+                    "building_footprint_sqm": 132,
+                    "remaining_area_sqm": 48,
+                    "ground_coverage_percent": 73.3,
+                },
+                "room_program": {
+                    "bedrooms": 3,
+                    "bathrooms": 3,
+                    "floors": 2,
+                },
+            }
+        )
+        q = "is in that we add the LDA tax ?"
+        self.assertEqual(local_rag.detect_intent(q), "fees")
+        result = local_rag.answer(facts, q)
+        text = result["text"]
+        self.assertIn("not included", text.lower())
+        self.assertIn("20,000,000", text)
+        self.assertIn("28,000,000", text)
+        self.assertIn("15", text)
+        self.assertNotIn("more beautiful", text.lower())
+        self.assertNotIn("terracotta", text.lower())
+        self.assertIn("lda-map-fee", result["debug"]["retrieved_ids"])
+
+    def test_budget_adds_lda_fee(self):
+        facts = _italian_facts()
+        facts.update(
+            {
+                "house_name": "Italian Family Villa",
+                "house_description": "Symmetrical Italianate villa with portico, arched openings, and terracotta roof.",
+                "building_width_m": 12,
+                "building_depth_m": 11,
+                "building_height_m": 8.5,
+                "floors": 2,
+                "estimated_cost_min": 20_000_000,
+                "estimated_cost_max": 28_000_000,
+                "building_footprint_sqm": 132,
+                "feasibility": {
+                    "building_footprint_sqm": 132,
+                    "remaining_area_sqm": 48,
+                    "ground_coverage_percent": 73.3,
+                },
+                "room_program": {"bedrooms": 3, "bathrooms": 3, "floors": 2, "garage": True},
+            }
+        )
+        q = "give me proper the budget of this house construction and also add the LDA tax in that"
+        result = local_rag.answer(facts, q)
+        text = result["text"]
+        self.assertEqual(result["intent"], "fees")
+        self.assertIn("20,000,000", text)
+        self.assertIn("28,000,000", text)
+        self.assertIn("Combined preliminary total", text)
+        self.assertIn("portico", text.lower())
+        self.assertNotIn("No. LDA tax is not included", text)
+
+    def test_authority_not_stored(self):
+        q = "then how i got that is this land is DHA or LDA?"
+        result = local_rag.answer(_italian_facts(), q)
+        text = result["text"].lower()
+        self.assertEqual(result["intent"], "authority")
+        self.assertIn("does not record", text)
+        self.assertIn("allotment", text)
+        self.assertNotIn("not included in the cost", text)
+
+    def test_unrelated_question_does_not_dump_beauty_notes(self):
+        result = local_rag.answer(_italian_facts(), "what is the weather tomorrow")
+        self.assertNotIn("more beautiful", result["text"].lower())
+
     def test_retrieve_includes_project_facts(self):
         passages = local_rag.retrieve("coverage footprint", _italian_facts(), top_k=5)
         ids = {p["id"] for p in passages}

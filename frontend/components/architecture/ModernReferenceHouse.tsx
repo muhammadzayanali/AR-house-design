@@ -13,6 +13,7 @@ import {
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   Shape,
+  ShapeGeometry,
   type Material,
 } from "three";
 
@@ -155,15 +156,125 @@ function GlassRailing({
   );
 }
 
+/** Lawn from a correctly wound shape (measured polygon or a padded rectangle). */
+function PlotGround({
+  width,
+  depth,
+  polygon,
+  material,
+}: {
+  width: number;
+  depth: number;
+  polygon?: Array<{ x: number; z: number }>;
+  material: Material;
+}) {
+  const geom = useMemo(() => {
+    const pad = 3.2;
+    const raw =
+      polygon && polygon.length >= 3
+        ? polygon
+        : [
+            { x: -width / 2 - pad, z: -depth / 2 - pad },
+            { x: width / 2 + pad + 1.2, z: -depth / 2 - pad },
+            { x: width / 2 + pad + 1.2, z: depth / 2 + pad + 1.4 },
+            { x: -width / 2 - pad, z: depth / 2 + pad + 1.4 },
+          ];
+    const mapped = raw.map((p) => ({ x: p.x, y: -p.z }));
+    let area = 0;
+    for (let i = 0; i < mapped.length; i++) {
+      const a = mapped[i];
+      const b = mapped[(i + 1) % mapped.length];
+      area += a.x * b.y - b.x * a.y;
+    }
+    const ordered = area < 0 ? [...mapped].reverse() : mapped;
+    const shape = new Shape();
+    shape.moveTo(ordered[0].x, ordered[0].y);
+    for (let i = 1; i < ordered.length; i++) shape.lineTo(ordered[i].x, ordered[i].y);
+    shape.closePath();
+    const g = new ShapeGeometry(shape);
+    g.rotateX(-Math.PI / 2);
+    g.computeVertexNormals();
+    return g;
+  }, [width, depth, polygon]);
+
+  return <mesh geometry={geom} material={material} receiveShadow position={[0, 0.02, 0]} />;
+}
+
+function SiteDressing({
+  width,
+  depth,
+  polygon,
+  grass,
+  concrete,
+  dark,
+}: {
+  width: number;
+  depth: number;
+  polygon?: Array<{ x: number; z: number }>;
+  grass: Material;
+  concrete: Material;
+  dark: Material;
+}) {
+  const hw = width / 2 + 3.2;
+  const hd = depth / 2 + 3.2;
+  const wallH = 1.15;
+  const gateW = 2.6;
+  return (
+    <group>
+      <PlotGround width={width} depth={depth} polygon={polygon} material={grass} />
+      {/* Raised kerb */}
+      <M position={[0, 0.08, hd]} args={[hw * 2, 0.16, 0.18]} material={concrete} castShadow={false} />
+      <M position={[0, 0.08, -hd]} args={[hw * 2, 0.16, 0.18]} material={concrete} castShadow={false} />
+      <M position={[-hw, 0.08, 0]} args={[0.18, 0.16, hd * 2]} material={concrete} castShadow={false} />
+      <M position={[hw, 0.08, 0]} args={[0.18, 0.16, hd * 2]} material={concrete} castShadow={false} />
+      {/* Boundary wall with a front gate gap */}
+      <M position={[-hw + gateW / 4, wallH / 2, hd]} args={[hw * 2 - gateW, wallH, 0.16]} material={concrete} />
+      <M position={[hw * 0.55, wallH / 2, hd]} args={[hw * 0.7, wallH, 0.16]} material={concrete} />
+      <M position={[0, wallH / 2, -hd]} args={[hw * 2, wallH, 0.16]} material={concrete} />
+      <M position={[-hw, wallH / 2, 0]} args={[0.16, wallH, hd * 2]} material={concrete} />
+      <M position={[hw, wallH / 2, 0]} args={[0.16, wallH, hd * 2]} material={concrete} />
+      {/* Driveway in front of the house, darker than the lawn */}
+      <M
+        position={[0, 0.06, hd * 0.55]}
+        args={[3.4, 0.08, Math.max(4, hd * 0.85)]}
+        material={dark}
+        castShadow={false}
+      />
+      <M
+        position={[width * 0.32, 0.05, depth * 0.15]}
+        args={[1.1, 0.05, depth * 0.7]}
+        material={concrete}
+        castShadow={false}
+      />
+      {/* Low-poly trees */}
+      {[
+        [hw - 1.2, -hd + 1.4],
+        [-hw + 1.3, hd - 1.6],
+        [hw - 1.6, hd - 2.2],
+      ].map(([x, z], i) => (
+        <group key={i} position={[x, 0, z]}>
+          <M position={[0, 0.7, 0]} args={[0.18, 1.4, 0.18]} material={dark} castShadow={false} />
+          <mesh position={[0, 1.7, 0]} castShadow={false}>
+            <coneGeometry args={[0.7, 1.5, 6]} />
+            <meshStandardMaterial color={i === 1 ? "#3e6b45" : "#2f5a3a"} roughness={1} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 export function ModernReferenceHouse({
   config,
   evening = false,
   mobileGlass = true,
+  plotPolygon,
 }: {
   config: HouseConfig;
   evening?: boolean;
   /** Prefer transparent+envMap glass on mobile (no transmission). */
   mobileGlass?: boolean;
+  plotPolygon?: Array<{ x: number; z: number }>;
 }) {
   const w = Math.max(0.5, Number(config.footprint?.width) || 11);
   const d = Math.max(0.5, Number(config.footprint?.depth) || 10);
@@ -175,7 +286,7 @@ export function ModernReferenceHouse({
   const cantilever = features.cantilever !== false && floors > 1 ? Math.min(1.8, d * 0.18) : 0;
   const upperW = w * 0.92;
   const upperD = d - cantilever * 0.35;
-  const slabT = 0.22;
+  const slabT = 0.3;
   const parapet = 0.28;
 
   const mats = useMemo(() => {
@@ -198,26 +309,26 @@ export function ModernReferenceHouse({
       ? new MeshPhysicalMaterial({
           color: evening ? "#f2e2c4" : "#a8c4d4",
           transparent: true,
-          opacity: evening ? 0.72 : 0.42,
+          opacity: evening ? 0.38 : 0.42,
           roughness: 0.06,
           metalness: 0.05,
           envMapIntensity: 1.4,
           side: DoubleSide,
           depthWrite: false,
-          emissive: evening ? "#ffb870" : "#000000",
-          emissiveIntensity: evening ? 0.45 : 0,
+          emissive: evening ? "#ff9a3c" : "#000000",
+          emissiveIntensity: evening ? 0.35 : 0,
         })
       : new MeshPhysicalMaterial({
           color: evening ? "#f2e2c4" : "#9ebcd0",
-          transmission: evening ? 0.2 : 0.65,
+          transmission: evening ? 0.45 : 0.65,
           transparent: true,
-          opacity: evening ? 0.92 : 0.55,
+          opacity: evening ? 0.55 : 0.55,
           roughness: 0.05,
           metalness: 0.08,
           thickness: 0.4,
           envMapIntensity: 1.5,
-          emissive: evening ? "#ffb870" : "#000000",
-          emissiveIntensity: evening ? 0.5 : 0,
+          emissive: evening ? "#ff9a3c" : "#000000",
+          emissiveIntensity: evening ? 0.28 : 0,
         });
     const dark = new MeshStandardMaterial({
       color: "#2a2e33",
@@ -238,10 +349,31 @@ export function ModernReferenceHouse({
       color: "#f5f0e6",
       roughness: 0.85,
       metalness: 0,
-      emissive: evening ? "#ffcc88" : "#000000",
-      emissiveIntensity: evening ? 0.25 : 0,
+      emissive: evening ? "#ffb060" : "#000000",
+      emissiveIntensity: evening ? 0.85 : 0,
     });
-    return { plaster, concrete, frame, glass, dark, wood, fabric, warm };
+    const grass = new MeshStandardMaterial({
+      color: "#4f7a45",
+      roughness: 1,
+      metalness: 0,
+    });
+    const stone = new MeshStandardMaterial({
+      color: "#8d8680",
+      roughness: 0.92,
+      metalness: 0.02,
+    });
+    const timber = new MeshStandardMaterial({
+      color: "#6e4a32",
+      roughness: 0.74,
+      metalness: 0.04,
+    });
+    const glow = new MeshStandardMaterial({
+      color: "#fff1d6",
+      emissive: evening ? "#ffd29a" : "#fff6e8",
+      emissiveIntensity: evening ? 2.4 : 0.35,
+      roughness: 0.4,
+    });
+    return { plaster, concrete, frame, glass, dark, wood, fabric, warm, grass, stone, timber, glow };
   }, [evening, mobileGlass]);
 
   // Front facade openings (local X relative to facade centre, Y from slab)
@@ -277,12 +409,13 @@ export function ModernReferenceHouse({
 
   return (
     <group>
-      {/* Site slab */}
-      <M
-        position={[0, 0.04, 0.15]}
-        args={[w + 2.4, 0.08, d + 3.2]}
-        material={mats.concrete}
-        castShadow={false}
+      <SiteDressing
+        width={w}
+        depth={d}
+        polygon={plotPolygon}
+        grass={mats.grass}
+        concrete={mats.concrete}
+        dark={mats.dark}
       />
 
       {/* Ground floor volume */}
@@ -322,7 +455,7 @@ export function ModernReferenceHouse({
       />
 
       {/* Interior silhouettes (visible through glass) */}
-      <group position={[0, 0.08, -0.4]}>
+      <group position={[0, 0.08, frontZ - 1.8]}>
         <M position={[-w * 0.22, 0.4, d * 0.15]} args={[1.6, 0.08, 0.9]} material={mats.wood} castShadow={false} />
         {[-0.5, 0, 0.5].map((dx) => (
           <M
@@ -336,7 +469,27 @@ export function ModernReferenceHouse({
         <M position={[w * 0.2, 0.35, d * 0.05]} args={[2.2, 0.45, 0.9]} material={mats.fabric} castShadow={false} />
         <M position={[w * 0.2, 0.55, d * 0.05 - 0.35]} args={[2.0, 0.55, 0.2]} material={mats.fabric} castShadow={false} />
         <M position={[0, groundH * 0.92, 0]} args={[w * 0.7, 0.04, d * 0.5]} material={mats.warm} castShadow={false} />
+        <M position={[-w * 0.28, 0.42, -d * 0.22]} args={[1.8, 0.4, 2.1]} material={mats.fabric} castShadow={false} />
+        {[-0.4, 0.4].map((dx) => (
+          <M
+            key={`spot-${dx}`}
+            position={[dx * w * 0.3, groundH - 0.12, 0]}
+            args={[0.18, 0.04, 0.18]}
+            material={mats.glow}
+            castShadow={false}
+          />
+        ))}
       </group>
+
+      {/* Timber cladding strip + stone feature */}
+      <M position={[w / 2 - 0.04, groundH * 0.55, -d * 0.1]} args={[0.08, groundH * 0.7, d * 0.35]} material={mats.timber} />
+      <M position={[-w / 2 + 0.02, groundH * 0.4, -d * 0.28]} args={[0.1, groundH * 0.55, d * 0.28]} material={mats.stone} />
+
+      {/* Door, canopy, AC */}
+      <M position={[-w * 0.32, 1.15, frontZ + 0.04]} args={[0.95, 2.15, 0.08]} material={mats.dark} />
+      <M position={[-w * 0.32, 2.35, frontZ + 0.55]} args={[1.6, 0.08, 1.1]} material={mats.concrete} />
+      <M position={[w / 2 + 0.12, groundH * 0.72, d * 0.15]} args={[0.22, 0.35, 0.7]} material={mats.dark} castShadow={false} />
+      <M position={[w / 2 + 0.12, groundH * 0.72, -d * 0.2]} args={[0.22, 0.35, 0.7]} material={mats.dark} castShadow={false} />
 
       {/* Intermediate floor slab + cantilever overhang */}
       {floors > 1 && (

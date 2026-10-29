@@ -6,7 +6,7 @@ import {
   OrbitControls,
 } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
-import { ACESFilmicToneMapping, SRGBColorSpace, Vector3 } from "three";
+import { ACESFilmicToneMapping, PerspectiveCamera, SRGBColorSpace, Vector3 } from "three";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { HouseModel, ModelLoadProgress } from "@/components/ar/HouseModel";
@@ -48,11 +48,13 @@ export function HouseRenderer({
   evening = false,
   footprintOverride,
   arMode = false,
+  plotPolygon,
 }: {
   design: HouseDesign;
   evening?: boolean;
   footprintOverride?: { width: number; depth: number };
   arMode?: boolean;
+  plotPolygon?: Array<{ x: number; z: number }>;
 }) {
   const useGlb =
     design.model_type === "glb" && Boolean(design.glb_url || design.model_url);
@@ -84,6 +86,7 @@ export function HouseRenderer({
               config={config}
               evening={evening}
               mobileGlass={mobile || arMode}
+              plotPolygon={plotPolygon}
             />
           }
         />
@@ -96,6 +99,7 @@ export function HouseRenderer({
       config={config}
       evening={evening}
       mobileGlass={mobile || arMode}
+      plotPolygon={plotPolygon}
     />
   );
 }
@@ -111,15 +115,20 @@ function ColorManagement({ evening }: { evening: boolean }) {
 }
 
 function FitCamera({ widthM, depthM, heightM }: { widthM: number; depthM: number; heightM: number }) {
-  const { camera, controls } = useThree() as {
+  const { camera, controls, size } = useThree() as {
     camera: { position: Vector3; lookAt: (x: number, y: number, z: number) => void; updateProjectionMatrix: () => void };
     controls?: { target: Vector3; update: () => void } | null;
+    size: { width: number; height: number };
   };
   useEffect(() => {
-    const span = Math.max(widthM, depthM, heightM);
-    const dist = Math.max(14, span * 1.55);
-    camera.position.set(dist * 0.85, dist * 0.42, dist * 0.95);
-    const ty = Math.min(heightM * 0.45, 3.2);
+    const span = Math.max(widthM, depthM, heightM, 8);
+    const aspect = size.height > 0 ? size.width / size.height : 1;
+    // Portrait canvases need more distance so the facade stays inside the frame.
+    const dist = Math.max(18, span * (aspect < 1 ? 2.35 : 1.7));
+    const elev = dist * Math.sin((16 * Math.PI) / 180);
+    const horiz = dist * Math.cos((16 * Math.PI) / 180);
+    camera.position.set(horiz * 0.78, elev + 1.2, horiz * 0.7);
+    const ty = Math.min(heightM * 0.32, 2.2);
     if (controls?.target) {
       controls.target.set(0, ty, 0);
       controls.update();
@@ -127,7 +136,28 @@ function FitCamera({ widthM, depthM, heightM }: { widthM: number; depthM: number
       camera.lookAt(0, ty, 0);
     }
     camera.updateProjectionMatrix();
-  }, [camera, controls, widthM, depthM, heightM]);
+  }, [camera, controls, widthM, depthM, heightM, size.width, size.height]);
+  return null;
+}
+
+/** Keep the model in the strip above a bottom sheet. */
+function ViewInset({ bottomPx }: { bottomPx: number }) {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    const cam = camera as PerspectiveCamera;
+    if (bottomPx < 8) {
+      cam.clearViewOffset();
+      cam.updateProjectionMatrix();
+      return;
+    }
+    const visible = Math.max(120, size.height - bottomPx);
+    cam.setViewOffset(size.width, size.height, 0, 0, size.width, visible);
+    cam.updateProjectionMatrix();
+    return () => {
+      cam.clearViewOffset();
+      cam.updateProjectionMatrix();
+    };
+  }, [camera, size.width, size.height, bottomPx]);
   return null;
 }
 
@@ -160,13 +190,27 @@ export function ArchViewer({
   className,
   showControls = true,
   footprintOverride,
+  evening: eveningProp,
+  onEveningChange,
+  viewInsetBottom = 0,
+  plotPolygon,
 }: {
   design: HouseDesign;
   className?: string;
   showControls?: boolean;
   footprintOverride?: { width: number; depth: number };
+  evening?: boolean;
+  onEveningChange?: (next: boolean) => void;
+  /** Pixels covered by a bottom sheet — model is recentred above it. */
+  viewInsetBottom?: number;
+  plotPolygon?: Array<{ x: number; z: number }>;
 }) {
-  const [evening, setEvening] = useState(false);
+  const [eveningLocal, setEveningLocal] = useState(false);
+  const evening = eveningProp ?? eveningLocal;
+  const setEvening = (next: boolean) => {
+    if (onEveningChange) onEveningChange(next);
+    else setEveningLocal(next);
+  };
   const mobile = useMemo(() => isMobileClient(), []);
   const w = footprintOverride?.width || design.building_width_m || 12;
   const d = footprintOverride?.depth || design.building_depth_m || 10;
@@ -184,13 +228,15 @@ export function ArchViewer({
     >
       {showControls && (
         <div className="absolute right-3 top-3 z-10 flex flex-col items-end gap-2">
-          <button
-            type="button"
-            onClick={() => setEvening((v) => !v)}
-            className="rounded-full bg-black/55 px-3 py-1.5 text-xs text-paper backdrop-blur"
-          >
-            {evening ? "Day light" : "Evening"}
-          </button>
+          {!onEveningChange ? (
+            <button
+              type="button"
+              onClick={() => setEvening(!evening)}
+              className="min-h-11 rounded-full bg-black/55 px-3 py-2 text-xs text-paper backdrop-blur"
+            >
+              {evening ? "Day light" : "Evening"}
+            </button>
+          ) : null}
           {generated ? (
             <span className="rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-stone backdrop-blur">
               Generated massing model
@@ -198,37 +244,44 @@ export function ArchViewer({
           ) : null}
         </div>
       )}
-      <ModelLoadProgress />
+      <ModelLoadProgress enabled={!generated} />
       <Canvas
         shadows={!mobile}
         dpr={[1, mobile ? 1.5 : 2]}
         camera={{
-          position: [w * 1.1, h * 0.7, d * 1.3],
-          fov: 36,
-          near: 0.1,
-          far: 200,
+          position: [w * 1.2, h * 0.55, d * 1.35],
+          fov: 38,
+          near: 0.15,
+          far: 220,
         }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
       >
         <ColorManagement evening={evening} />
-        <color attach="background" args={[evening ? "#0c1018" : "#b9c7d4"]} />
-        <fog attach="fog" args={[evening ? "#0c1018" : "#b9c7d4", 40, 90]} />
+        <color attach="background" args={[evening ? "#2a2622" : "#5c6166"]} />
+        <fog attach="fog" args={[evening ? "#2a2622" : "#5c6166", 55, 140]} />
+        <ViewInset bottomPx={viewInsetBottom} />
         <SceneLights evening={evening} desktopShadows={!mobile} />
         <Suspense fallback={null}>
           <HouseRenderer
             design={design}
             evening={evening}
             footprintOverride={footprintOverride}
+            plotPolygon={plotPolygon}
           />
           <ContactShadows
             position={[0, 0.01, 0]}
-            opacity={0.5}
+            opacity={evening ? 0.62 : 0.45}
             scale={Math.max(28, w * 3)}
-            blur={2.2}
-            far={20}
+            blur={2.4}
+            far={22}
           />
-          {!evening && <Environment preset="apartment" />}
           <FitCamera widthM={w} depthM={d} heightM={h} />
+        </Suspense>
+        <Suspense fallback={null}>
+          <Environment
+            preset={evening ? "sunset" : "city"}
+            environmentIntensity={evening ? 0.55 : 0.85}
+          />
         </Suspense>
         <OrbitControls
           makeDefault

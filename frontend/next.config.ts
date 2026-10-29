@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const djangoOrigin = process.env.DJANGO_ORIGIN ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   skipTrailingSlashRedirect: true,
   transpilePackages: [
     "three",

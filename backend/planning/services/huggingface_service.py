@@ -34,7 +34,12 @@ Do not dump raw JSON. Do not invent room counts beyond the FACTS section."""
 
 SYSTEM_REPORT = SYSTEM_BASE + "\nWrite a short planning report covering plot, design, programme, feasibility, notes, and limitations."
 
-SYSTEM_QA = SYSTEM_BASE + "\nAnswer the client's question directly. Prefer FACTS for numbers; use RAG passages for style advice."
+SYSTEM_QA = SYSTEM_BASE + (
+    "\nAnswer the client's question in the first sentence. "
+    "If they ask whether LDA tax, map fees, stamp duty, or utility charges are inside "
+    "the cost, say they are not included. Do not replace that answer with beautification tips. "
+    "Prefer FACTS for project numbers; use RAG passages for style advice and published fee notes."
+)
 
 
 def is_hf_configured() -> bool:

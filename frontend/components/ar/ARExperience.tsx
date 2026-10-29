@@ -12,6 +12,7 @@ import { HitTestReticle } from "@/components/ar/HitTestReticle";
 import { PlotGizmo } from "@/components/ar/PlotGizmo";
 import { AIMeasurement, type AiMeasureResult } from "@/components/ar/AIMeasurement";
 import { ArchViewer } from "@/components/architecture/ArchViewer";
+import { ResultScreen } from "@/components/planning/ResultScreen";
 import { footprintFromWorldPolygon } from "@/lib/geometry/displayToImage";
 import {
   DesignCatalog,
@@ -67,6 +68,8 @@ export default function ARExperience() {
   const [support, setSupport] = useState<XRSupportStatus>({ kind: "checking" });
   const [sessionActive, setSessionActive] = useState(false);
   const [phase, setPhase] = useState<Phase>("setup");
+  const [evening, setEvening] = useState(false);
+  const [sheetPx, setSheetPx] = useState(0);
   const [points, setPoints] = useState<WorldPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -552,28 +555,57 @@ export default function ARExperience() {
   return (
     <div id="plotline-ar-overlay" className="ar-lock relative bg-ink text-paper">
       {/* Full-bleed 3D when a design is selected (desktop) */}
-      {showPreview && (
-        <div className="absolute inset-0 z-0">
-          <ArchViewer
-            design={recommendation.house}
-            className="h-full w-full"
-            footprintOverride={
-              previewFootprint
-                ? { width: previewFootprint.width, depth: previewFootprint.depth }
-                : undefined
+      {showPreview && recommendation && (
+        <div className="absolute inset-0 z-0 flex flex-col lg:flex-row">
+          <div
+            className="relative min-h-0 w-full flex-1 lg:h-full lg:w-[65%] lg:flex-none"
+            style={sheetPx > 0 ? { height: `calc(100dvh - ${sheetPx}px)`, flex: "none" } : undefined}
+          >
+            <ArchViewer
+              design={recommendation.house}
+              className="h-full w-full"
+              showControls={false}
+              evening={evening}
+              onEveningChange={setEvening}
+              viewInsetBottom={0}
+              footprintOverride={
+                previewFootprint
+                  ? { width: previewFootprint.width, depth: previewFootprint.depth }
+                  : undefined
+              }
+              plotPolygon={
+                points.length >= 3
+                  ? points.map((p) => ({
+                      x: p.x - points.reduce((s, q) => s + q.x, 0) / points.length,
+                      z: p.z - points.reduce((s, q) => s + q.z, 0) / points.length,
+                    }))
+                  : undefined
+              }
+            />
+          </div>
+          <ResultScreen
+            house={recommendation.house}
+            units={units}
+            reason={recommendation.reason}
+            feasibility={feasibility}
+            roomProgram={roomProgram}
+            evening={evening}
+            onEvening={setEvening}
+            support={support}
+            onViewAR={() => void enterAR()}
+            onSave={() => void saveProject()}
+            onBack={() => setPhase("catalog")}
+            generated={
+              recommendation.house.model_type !== "glb" ||
+              recommendation.house.source_provider === "plotline-procedural"
             }
+            onSheetHeight={setSheetPx}
           />
         </div>
       )}
 
-      {!sessionActive && (
-        <div
-          className={
-            showPreview
-              ? "pointer-events-none absolute inset-x-0 bottom-0 z-10 max-h-[48vh] overflow-y-auto p-3"
-              : "pointer-events-none absolute inset-x-0 top-0 z-10 max-h-dvh overflow-y-auto p-3"
-          }
-        >
+      {!sessionActive && !showPreview && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 max-h-dvh overflow-y-auto p-3">
           <div className="pointer-events-auto">{hud}</div>
         </div>
       )}
