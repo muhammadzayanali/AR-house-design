@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import HouseDesign, Project, Report
-from .narration import answer_question, generate_report_text, project_facts
+from .narration import answer_question, generate_report_text, preview_facts, project_facts
 from .recommendation import recommend_house
 from .serializers import (
     HouseDesignSerializer,
@@ -487,6 +487,95 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Project.objects.filter(user=self.request.user).select_related(
             "selected_house"
+        )
+
+
+def _preview_facts_from_request(request):
+    raw_id = request.data.get("house_id")
+    raw_area = request.data.get("plot_area_sqm")
+    try:
+        house_id = int(raw_id)
+        area = float(raw_area)
+    except (TypeError, ValueError):
+        return None, Response(
+            {"detail": "house_id and plot_area_sqm are required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if area <= 0:
+        return None, Response(
+            {"detail": "plot_area_sqm must be positive"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        house = HouseDesign.objects.get(pk=house_id, active=True)
+    except HouseDesign.DoesNotExist:
+        return None, Response({"detail": "Design not found"}, status=status.HTTP_404_NOT_FOUND)
+    length = request.data.get("plot_length_m")
+    width = request.data.get("plot_width_m")
+    try:
+        length_m = float(length) if length not in (None, "") else None
+        width_m = float(width) if width not in (None, "") else None
+    except (TypeError, ValueError):
+        length_m = width_m = None
+    facts = preview_facts(
+        house,
+        area,
+        length_m,
+        width_m,
+        recommendation_reason=(request.data.get("reason") or "")[:500],
+    )
+    return facts, None
+
+
+class PreviewReportView(APIView):
+    """Planning report for the open design, before the project is saved."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        facts, error = _preview_facts_from_request(request)
+        if error is not None:
+            return error
+        result = generate_report_text(facts)
+        return Response(
+            {
+                "narration_text": result["text"],
+                "source": result["source"],
+                "model": result.get("model"),
+                "warning": result.get("warning"),
+            }
+        )
+
+
+class PreviewAskView(APIView):
+    """Consultant answer for the open design, before the project is saved."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        question = (request.data.get("question") or "").strip()
+        if not question:
+            return Response(
+                {"detail": "question is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(question) > MAX_QUESTION_LENGTH:
+            return Response(
+                {"detail": "question must be at most {} characters".format(MAX_QUESTION_LENGTH)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        facts, error = _preview_facts_from_request(request)
+        if error is not None:
+            return error
+        result = answer_question(facts, question)
+        return Response(
+            {
+                "answer": result["text"],
+                "source": result["source"],
+                "model": result.get("model"),
+                "warning": result.get("warning"),
+                "intent": result.get("intent"),
+            }
         )
 
 

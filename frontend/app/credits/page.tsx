@@ -75,6 +75,11 @@ export default function CreditsPage() {
           <li>drei Environment presets (apartment) for PBR reflections in the desktop viewer.</li>
           <li>Draco / meshopt decoders self-hosted under <code>/public/draco</code> (Three.js).</li>
           <li>Reference look for Modern: <code>docs/reference/house-reference.png</code> (not shipped as a model).</li>
+          <li>
+            AlvaAR (Alan Ross, GPLv3) was considered for experimental phone tracking and is not
+            loaded. It was not validated on a device in this build. Camera preview uses the phone
+            gyro only.
+          </li>
         </ul>
       </section>
     </main>

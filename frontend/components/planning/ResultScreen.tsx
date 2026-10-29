@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { api } from "@/lib/api";
 import type { Feasibility, HouseDesign, LandUnits } from "@/lib/types";
 import { supportMessage, type XRSupportStatus } from "@/lib/xr/support";
 import { formatPkr } from "@/lib/units/land";
@@ -33,7 +34,10 @@ export function ResultScreen({
   evening,
   onEvening,
   support,
+  placementMode,
+  onPlacementMode,
   onViewAR,
+  onCameraPreview,
   onSave,
   onBack,
   generated,
@@ -47,7 +51,10 @@ export function ResultScreen({
   evening: boolean;
   onEvening: (next: boolean) => void;
   support: XRSupportStatus;
+  placementMode: "webxr" | "camera-preview";
+  onPlacementMode: (mode: "webxr" | "camera-preview") => void;
   onViewAR: () => void;
+  onCameraPreview: () => void;
   onSave: () => void;
   onBack: () => void;
   generated: boolean;
@@ -56,13 +63,26 @@ export function ResultScreen({
   const [tab, setTab] = useState<Tab>("overview");
   const [snap, setSnap] = useState<Snap>("half");
   const [costOpen, setCostOpen] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [reportSource, setReportSource] = useState("");
+  const [reportState, setReportState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState("");
+  const [turns, setTurns] = useState<Array<{ role: "user" | "assistant"; text: string; source?: string }>>([]);
   const rooms = roomProgram || house.room_program || {};
   const beds = Number(rooms.bedrooms ?? house.bedrooms ?? 0);
   const baths = Number(rooms.bathrooms ?? house.bathrooms ?? 0);
   const floors = Number(rooms.floors ?? house.floors ?? 1);
   const parking = house.parking ? "Yes" : "No";
   const arOk = support.kind === "supported";
-  const arReason = support.kind === "supported" ? "" : supportMessage(support);
+  const previewOk = support.kind !== "checking" && support.kind !== "insecure";
+  const arReason =
+    support.kind === "supported"
+      ? ""
+      : support.kind === "insecure"
+        ? supportMessage(support)
+        : "This phone has no WebXR AR. Camera preview places the house approximately. It is not full AR.";
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -78,6 +98,68 @@ export function ResultScreen({
       window.removeEventListener("resize", report);
     };
   }, [snap, onSheetHeight]);
+
+  const consultBody = {
+    house_id: house.id,
+    plot_area_sqm: units.sqm,
+    reason: reason || "",
+  };
+
+  useEffect(() => {
+    if (tab !== "report") return;
+    let cancelled = false;
+    setReportState("loading");
+    api<{ narration_text: string; source: string }>("/api/preview/report/", {
+      method: "POST",
+      body: JSON.stringify(consultBody),
+    })
+      .then((data) => {
+        if (cancelled) return;
+        setReportText(data.narration_text || "Report unavailable.");
+        setReportSource(data.source || "");
+        setReportState("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setReportState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Reload when the open design or plot changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, house.id, units.sqm]);
+
+  function openTab(next: Tab) {
+    setTab(next);
+    if ((next === "ask" || next === "report") && window.matchMedia("(max-width: 1023px)").matches) {
+      setSnap("full");
+    }
+  }
+
+  async function ask(event: React.FormEvent) {
+    event.preventDefault();
+    const q = question.trim();
+    if (!q || asking) return;
+    setQuestion("");
+    setAskError("");
+    setTurns((prev) => [...prev, { role: "user", text: q }]);
+    setAsking(true);
+    try {
+      const data = await api<{ answer: string; source: string }>("/api/preview/ask/", {
+        method: "POST",
+        body: JSON.stringify({ ...consultBody, question: q }),
+      });
+      setTurns((prev) => [
+        ...prev,
+        { role: "assistant", text: data.answer || "No answer.", source: data.source },
+      ]);
+    } catch {
+      setAskError("The consultant could not answer. Check that the API is running and try again.");
+    } finally {
+      setAsking(false);
+    }
+  }
 
   const onPointerDown = (e: React.PointerEvent) => {
     const startY = e.clientY;
@@ -189,12 +271,12 @@ export function ResultScreen({
       <div className="flex gap-2 px-4 pb-2">
         <button
           type="button"
-          disabled={!arOk}
+          disabled={placementMode === "webxr" ? !arOk : !previewOk}
           title={arReason}
-          onClick={onViewAR}
+          onClick={() => (placementMode === "webxr" ? onViewAR() : onCameraPreview())}
           className="min-h-11 flex-1 rounded-xl bg-brass px-3 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-stone"
         >
-          View in AR
+          {placementMode === "webxr" ? "View in AR" : "Camera preview"}
         </button>
         <button
           type="button"
@@ -202,6 +284,27 @@ export function ResultScreen({
           className="min-h-11 flex-1 rounded-xl bg-white/10 px-3 text-sm ring-1 ring-white/15"
         >
           Save project
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
+        <span className="text-[11px] uppercase tracking-wide text-stone">
+          Active: {placementMode === "webxr" ? "WebXR" : "Camera preview"}
+        </span>
+        <button
+          type="button"
+          disabled={!arOk}
+          onClick={() => onPlacementMode("webxr")}
+          className={`min-h-11 rounded-full px-3 text-xs ${placementMode === "webxr" ? "bg-white text-ink" : "text-stone"}`}
+        >
+          WebXR
+        </button>
+        <button
+          type="button"
+          disabled={!previewOk}
+          onClick={() => onPlacementMode("camera-preview")}
+          className={`min-h-11 rounded-full px-3 text-xs ${placementMode === "camera-preview" ? "bg-white text-ink" : "text-stone"}`}
+        >
+          Camera preview
         </button>
       </div>
       {!arOk ? <p className="px-4 pb-2 text-xs text-stone">{arReason}</p> : null}
@@ -250,7 +353,7 @@ export function ResultScreen({
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => openTab(t.id)}
             className={`min-h-11 shrink-0 rounded-lg px-3 text-sm ${
               tab === t.id ? "bg-white text-ink" : "text-stone"
             }`}
@@ -289,14 +392,62 @@ export function ResultScreen({
           </ul>
         )}
         {tab === "report" && (
-          <p className="text-stone">
-            Save the project to generate the written planning report. This screen is a massing study, not a construction drawing.
-          </p>
+          <div className="space-y-2">
+            {reportState === "loading" ? <p className="text-stone">Writing the planning report…</p> : null}
+            {reportState === "error" ? (
+              <p className="text-red-300">The report could not be generated. Try again in a moment.</p>
+            ) : null}
+            {reportState === "ready" ? (
+              <>
+                <p className="text-[11px] uppercase tracking-wide text-stone">
+                  {reportSource === "local_rag" ? "Local RAG" : reportSource || "Report"} · preliminary
+                </p>
+                <p className="whitespace-pre-wrap text-paper">{reportText}</p>
+              </>
+            ) : null}
+          </div>
         )}
         {tab === "ask" && (
-          <p className="text-stone">
-            Save the project, then open it to ask the planning assistant. Answers stay inside the saved brief.
-          </p>
+          <div className="space-y-3">
+            <p className="text-xs text-stone">
+              Asks about {house.name} on this {units.sqm.toFixed(0)} m² plot. Preliminary, not a quote or a challan.
+            </p>
+            {turns.map((turn, i) => (
+              <div
+                key={`${turn.role}-${i}`}
+                className={
+                  turn.role === "user"
+                    ? "ml-6 rounded-xl bg-white/10 px-3 py-2"
+                    : "mr-2 rounded-xl bg-white/5 px-3 py-2 ring-1 ring-white/10"
+                }
+              >
+                {turn.role === "assistant" && turn.source ? (
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-brass">
+                    {turn.source === "local_rag" ? "Local RAG" : turn.source}
+                  </p>
+                ) : null}
+                <p className="whitespace-pre-wrap">{turn.text}</p>
+              </div>
+            ))}
+            {asking ? <p className="text-stone">Thinking…</p> : null}
+            {askError ? <p className="text-red-300">{askError}</p> : null}
+            <form onSubmit={ask} className="flex gap-2">
+              <input
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask about cost, LDA tax, rooms…"
+                className="min-h-11 flex-1 rounded-xl bg-white/10 px-3 text-sm text-paper outline-none ring-1 ring-white/15"
+                aria-label="Question"
+              />
+              <button
+                type="submit"
+                disabled={asking || !question.trim()}
+                className="min-h-11 rounded-xl bg-brass px-4 text-sm font-medium text-ink disabled:opacity-50"
+              >
+                Ask
+              </button>
+            </form>
+          </div>
         )}
       </div>
     </section>

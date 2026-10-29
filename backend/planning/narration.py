@@ -92,6 +92,65 @@ def project_facts(project) -> Dict[str, Any]:
     return facts
 
 
+def preview_facts(
+    house,
+    land_size_sqm: float,
+    plot_length_m=None,
+    plot_width_m=None,
+    recommendation_reason: str = "",
+) -> Dict[str, Any]:
+    """Same grounded facts as a saved project, without requiring an account."""
+    from .planning_engine import design_planning_overlay
+
+    units = sqm_to_units(land_size_sqm)
+    feas = compute_feasibility(land_size_sqm, house, plot_length_m, plot_width_m)
+    overlay = design_planning_overlay(house, land_size_sqm, feas)
+    facts: Dict[str, Any] = {
+        "project_id": None,
+        "project_name": "",
+        "land_size_sqm": round(float(land_size_sqm), 2),
+        "land_size_sqft": units.get("sqft"),
+        "plot_length_m": plot_length_m,
+        "plot_width_m": plot_width_m,
+        "measurement_type": "manual",
+        "measurement_quality": "",
+        "calibration_method": "",
+        "land_size_marla": units["marla"],
+        "land_size_kanal": units["kanal"],
+        "land_size_acre": units["acre"],
+        "land_size_display_unit": units.get("display_unit"),
+        "preferred_style": house.style,
+        "recommendation_reason": recommendation_reason,
+        "created_at": None,
+        "preliminary_space": preliminary_space_estimate(land_size_sqm),
+        "house_name": house.name,
+        "house_style": house.style,
+        "house_description": house.description or "",
+        "building_height_m": house.building_height_m,
+        "bedrooms": house.bedrooms,
+        "bathrooms": house.bathrooms,
+        "floors": house.floors,
+        "parking": house.parking,
+        "estimated_cost_pkr": house.estimated_cost_pkr,
+        "estimated_cost_min": house.estimated_cost_min,
+        "estimated_cost_max": house.estimated_cost_max,
+        "currency": house.currency,
+        "building_footprint_sqm": house.building_footprint_sqm,
+        "building_width_m": house.building_width_m,
+        "building_depth_m": house.building_depth_m,
+        "room_program": design_room_program(house),
+        "room_sizes": overlay.get("room_sizes"),
+        "planning": overlay.get("planning"),
+        "cost_estimate": overlay.get("cost_estimate"),
+        "plot_range_min": house.effective_min_plot,
+        "plot_range_max": house.effective_max_plot,
+        "model_type": house.model_type,
+        "feasibility": feas,
+    }
+    facts["grounded"] = build_grounded_context(facts)
+    return facts
+
+
 def generate_report_text(facts: Dict[str, Any]) -> Dict[str, Any]:
     grounded = facts.get("grounded") or build_grounded_context(facts)
     local_text = local_rag.synthesize_report(facts)

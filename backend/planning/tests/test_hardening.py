@@ -234,6 +234,29 @@ class AskGroundingApiTests(TestCase):
         self.assertEqual(r.data["grounded"]["facts"]["bedrooms"], 3)
         self.assertTrue(r.data.get("debug") is None or r.data["debug"]["project_facts_included"])
 
+    def test_preview_report_and_ask_without_saving(self):
+        report = self.client.post(
+            "/api/preview/report/",
+            {"house_id": self.house.id, "plot_area_sqm": 180, "reason": "Exact match test"},
+            format="json",
+        )
+        self.assertEqual(report.status_code, 200)
+        self.assertIn("Italian Compact Villa", report.data["narration_text"])
+        self.assertEqual(report.data["source"], "local_rag")
+
+        ask = self.client.post(
+            "/api/preview/ask/",
+            {
+                "house_id": self.house.id,
+                "plot_area_sqm": 180,
+                "question": "What is the estimated cost?",
+            },
+            format="json",
+        )
+        self.assertEqual(ask.status_code, 200)
+        self.assertIn("14,000,000", ask.data["answer"])
+        self.assertIn(ask.data["source"], ("local_rag", "huggingface"))
+
     def test_design_match_reason(self):
         r = self.client.get(
             "/api/designs/match/?style=Italian%20Villa&plot_area=180"

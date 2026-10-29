@@ -20,6 +20,8 @@ urlpatterns = [
     path("space-estimate/", views.SpaceEstimateView.as_view()),
     path("planning/summary/", views.PlanningSummaryView.as_view()),
     path("recommend/", views.RecommendView.as_view()),
+    path("preview/report/", views.PreviewReportView.as_view()),
+    path("preview/ask/", views.PreviewAskView.as_view()),
     path("projects/", views.ProjectListCreateView.as_view()),
     path("projects/<int:pk>/", views.ProjectDetailView.as_view()),
     path("projects/<int:pk>/feasibility/", views.ProjectFeasibilityDetailView.as_view()),

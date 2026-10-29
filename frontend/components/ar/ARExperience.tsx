@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Vector3 } from "three";
 
 import { AnchoredHouse } from "@/components/ar/AnchoredHouse";
+import { CameraPreview } from "@/components/ar/CameraPreview";
 import { HitTestReticle } from "@/components/ar/HitTestReticle";
 import { PlotGizmo } from "@/components/ar/PlotGizmo";
 import { AIMeasurement, type AiMeasureResult } from "@/components/ar/AIMeasurement";
@@ -70,6 +71,9 @@ export default function ARExperience() {
   const [phase, setPhase] = useState<Phase>("setup");
   const [evening, setEvening] = useState(false);
   const [sheetPx, setSheetPx] = useState(0);
+  const [cameraPreviewOpen, setCameraPreviewOpen] = useState(false);
+  const [placementMode, setPlacementMode] = useState<"webxr" | "camera-preview">("camera-preview");
+  const placementPicked = useRef(false);
   const [points, setPoints] = useState<WorldPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,6 +93,12 @@ export default function ARExperience() {
   const [preliminary, setPreliminary] = useState<Preliminary | null>(null);
   const [planningSummary, setPlanningSummary] = useState<PlanningSummary | null>(null);
   const [landUnits, setLandUnits] = useState<LandUnits | null>(null);
+
+  useEffect(() => {
+    if (placementPicked.current) return;
+    if (support.kind === "supported") setPlacementMode("webxr");
+    else if (support.kind === "no-ar" || support.kind === "no-webxr") setPlacementMode("camera-preview");
+  }, [support.kind]);
 
   useEffect(() => {
     void detectImmersiveAR().then(setSupport);
@@ -592,7 +602,13 @@ export default function ARExperience() {
             evening={evening}
             onEvening={setEvening}
             support={support}
+            placementMode={placementMode}
+            onPlacementMode={(mode) => {
+              placementPicked.current = true;
+              setPlacementMode(mode);
+            }}
             onViewAR={() => void enterAR()}
+            onCameraPreview={() => setCameraPreviewOpen(true)}
             onSave={() => void saveProject()}
             onBack={() => setPhase("catalog")}
             generated={
@@ -648,6 +664,22 @@ export default function ARExperience() {
           )}
         </XR>
       </Canvas>
+      {cameraPreviewOpen && recommendation ? (
+        <CameraPreview
+          design={recommendation.house}
+          points={points}
+          lengthM={lengthM}
+          widthM={widthM}
+          webxrAvailable={support.kind === "supported"}
+          onClose={() => setCameraPreviewOpen(false)}
+          onUseWebXR={() => {
+            setCameraPreviewOpen(false);
+            placementPicked.current = true;
+            setPlacementMode("webxr");
+            void enterAR();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
