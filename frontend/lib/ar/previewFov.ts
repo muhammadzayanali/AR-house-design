@@ -38,3 +38,24 @@ export function subtendedHorizontalDeg(widthM: number, distanceM: number) {
   const d = Math.max(distanceM, 0.001);
   return (2 * Math.atan(widthM / 2 / d) * 180) / Math.PI;
 }
+
+/**
+ * How far back the camera must stand so the whole building fits.
+ * Distance is to the house centre. The front face, porch, width, and
+ * height all have to land inside the frame, with a small margin.
+ */
+export function fitStandOff(
+  widthM: number,
+  depthM: number,
+  heightM: number,
+  horizontalFovDeg: number,
+  aspect = 1.5,
+) {
+  const hFov = (Math.min(100, Math.max(30, horizontalFovDeg)) * Math.PI) / 180;
+  const vFov = 2 * Math.atan(Math.tan(hFov / 2) / Math.max(aspect, 0.45));
+  const margin = 1.35;
+  const distW = ((Math.max(widthM, 4) / 2) * margin) / Math.tan(hFov / 2);
+  const distH = ((Math.max(heightM, 3) / 2) * margin) / Math.tan(vFov / 2);
+  const front = Math.max(depthM, 4) / 2 + 2.5;
+  return Math.min(56, Math.max(10, Math.max(distW, distH) + front));
+}

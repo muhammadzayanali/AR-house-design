@@ -621,8 +621,8 @@ export default function ARExperience() {
       )}
 
       {!sessionActive && !showPreview && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 max-h-dvh overflow-y-auto p-3">
-          <div className="pointer-events-auto">{hud}</div>
+        <div className="ar-scroll pointer-events-auto absolute inset-0 z-10 px-3 pt-3 pb-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+          {hud}
         </div>
       )}
 
@@ -657,7 +657,7 @@ export default function ARExperience() {
                 pointerEvents: "none",
               }}
             >
-              <div className="pointer-events-auto max-h-[70%] overflow-y-auto p-3">
+              <div className="ar-scroll pointer-events-auto max-h-[70%] p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 {hud}
               </div>
             </XRDomOverlay>

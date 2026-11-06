@@ -26,8 +26,14 @@ body {
   color: var(--ink);
 }
 
+html {
+  height: auto;
+}
+
 body {
   font-family: var(--font-outfit), system-ui, sans-serif;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .font-serif {
@@ -35,11 +41,26 @@ body {
 }
 
 .ar-lock {
-  touch-action: none;
   overscroll-behavior: none;
   user-select: none;
   overflow: hidden;
   height: 100dvh;
+  max-height: 100svh;
+}
+
+/* Keep orbit/drag on the 3D canvas. Do not set this on the page,
+   or iOS will refuse to scroll every panel inside it. */
+.ar-lock canvas {
+  touch-action: none;
+}
+
+.ar-scroll {
+  min-height: 0;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes plotline-bounce {

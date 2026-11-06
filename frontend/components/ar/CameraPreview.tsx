@@ -10,7 +10,6 @@ import { Line } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Euler,
   PerspectiveCamera,
   Plane,
   Quaternion,
@@ -23,14 +22,13 @@ import {
 import { HouseRenderer } from "@/components/architecture/ArchViewer";
 import { OrientationFilter, requestMotionPermission, screenOrientationAngle } from "@/lib/ar/deviceOrientation";
 import { SlamPoseProvider } from "@/lib/ar/poseProvider";
-import { visiblePerspective } from "@/lib/ar/previewFov";
+import { fitStandOff, visiblePerspective } from "@/lib/ar/previewFov";
 import type { HouseDesign, WorldPoint } from "@/lib/types";
 
 const GROUND = new Plane(new Vector3(0, 1, 0), 1.5);
 const HIT = new Vector3();
 const NDC = new Vector2();
 const RAY = new Raycaster();
-const LOOK_DOWN = new Quaternion().setFromEuler(new Euler(0.42, 0, 0));
 
 function outlineXZ(points: WorldPoint[], lengthM: number, widthM: number) {
   if (points.length >= 3) {
@@ -100,10 +98,7 @@ function GyroRig({ armed }: { armed: boolean }) {
     let frame = 0;
     const tick = () => {
       frame = requestAnimationFrame(tick);
-      if (!filter.current.tick(out.current, blend)) {
-        camera.quaternion.copy(LOOK_DOWN);
-        return;
-      }
+      if (!filter.current.tick(out.current, blend)) return;
       camera.quaternion.copy(out.current);
     };
     frame = requestAnimationFrame(tick);
@@ -114,6 +109,22 @@ function GyroRig({ armed }: { armed: boolean }) {
     };
   }, [armed, camera]);
 
+  return null;
+}
+
+function FrameLook({
+  active,
+  aim,
+}: {
+  active: boolean;
+  aim: [number, number, number];
+}) {
+  const { camera } = useThree();
+  useEffect(() => {
+    if (!active) return;
+    camera.up.set(0, 1, 0);
+    camera.lookAt(aim[0], aim[1], aim[2]);
+  }, [active, camera, aim[0], aim[1], aim[2]]);
   return null;
 }
 
@@ -198,9 +209,17 @@ export function CameraPreview({
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [motion, setMotion] = useState<"needed" | "on" | "denied">("needed");
+  const fit = useMemo(() => {
+    const width = design.building_width_m || 12;
+    const depth = design.building_depth_m || 10;
+    const height = design.building_height_m || (design.floors || 2) * 3.2;
+    return fitStandOff(width, depth, height, 60, 1.5);
+  }, [design.building_width_m, design.building_depth_m, design.building_height_m, design.floors]);
+  const houseHeight = design.building_height_m || (design.floors || 2) * 3.2;
   const [heightM, setHeightM] = useState(1.5);
   const [hfov, setHfov] = useState(60);
-  const [placed, setPlaced] = useState<[number, number, number]>([0, -1.5, -8]);
+  const [distance, setDistance] = useState(fit);
+  const [placed, setPlaced] = useState<[number, number, number]>([0, -1.5, -fit]);
   const [yaw, setYaw] = useState(0);
   const [notice, setNotice] = useState("");
   const [sun, setSun] = useState(0.55);
@@ -261,7 +280,7 @@ export function CameraPreview({
 
   useEffect(() => {
     setNotice(
-      `${design.name} is in front of the camera at real size. Drag it to move it. On a computer this picture is your webcam, not the floor.`,
+      `${design.name} is framed at real size. Drag Zoom out until the whole house fits. On a computer this picture is your webcam, not the floor.`,
     );
   }, [design.name]);
 
@@ -334,7 +353,7 @@ export function CameraPreview({
         className="absolute inset-0"
         shadows
         gl={{ alpha: true, antialias: true }}
-        camera={{ position: [0, 0, 0], fov: 70, near: 0.05, far: 80 }}
+        camera={{ position: [0, 0, 0], fov: 50, near: 0.08, far: 160 }}
         onCreated={({ gl, camera }) => {
           gl.setClearColor(0x000000, 0);
           const dom = gl.domElement as HTMLCanvasElement & { __camera?: PerspectiveCamera };
@@ -369,13 +388,17 @@ export function CameraPreview({
         }}
       >
         <FovLock video={videoEl} horizontalDeg={hfov} />
+        <FrameLook
+          active
+          aim={[placed[0], placed[1] + houseHeight / 2, placed[2]]}
+        />
         <GyroRig armed={motion === "on"} />
         <Brightness video={videoEl} onLevel={setSun} />
         <PlacedGroup design={design} outline={outline} position={placed} yaw={yaw} sun={sun} />
       </Canvas>
 
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3 pb-[max(12px,env(safe-area-inset-bottom))]">
-        <div className="pointer-events-auto space-y-2">
+      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-3 p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="ar-scroll pointer-events-auto max-h-[38svh] space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="rounded-full bg-black/70 px-3 py-2 text-xs">Camera preview — approximate placement</p>
             <button type="button" onClick={onClose} className="min-h-11 rounded-full bg-black/70 px-4 text-sm">
@@ -395,7 +418,7 @@ export function CameraPreview({
           ) : null}
         </div>
 
-        <div className="pointer-events-auto space-y-2 rounded-2xl bg-black/75 p-3">
+        <div className="ar-scroll pointer-events-auto max-h-[46svh] space-y-2 rounded-2xl bg-black/75 p-3">
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-white px-3 py-2 text-xs text-ink">Active: Camera preview</span>
             {webxrAvailable ? (
@@ -425,6 +448,22 @@ export function CameraPreview({
           {motion === "denied" ? (
             <p className="text-xs text-amber-100">Motion permission was denied. Placement still works, but turning will not.</p>
           ) : null}
+          <label className="flex items-center justify-between gap-3 text-xs">
+            Zoom out {distance.toFixed(0)} m
+            <input
+              type="range"
+              min={8}
+              max={56}
+              step={0.5}
+              value={distance}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setDistance(next);
+                setPlaced([0, -heightM, -next]);
+              }}
+              className="w-40"
+            />
+          </label>
           <label className="flex items-center justify-between gap-3 text-xs">
             Phone height {heightM.toFixed(2)} m
             <input
@@ -464,9 +503,10 @@ export function CameraPreview({
           <button
             type="button"
             onClick={() => {
-            setPlaced([0, -heightM, -8]);
+            setDistance(fit);
+            setPlaced([0, -heightM, -fit]);
             setYaw(0);
-            setNotice(`${design.name} is back in front of the camera.`);
+            setNotice(`${design.name} is framed again. Drag Zoom out if you want more of the site.`);
             }}
             className="min-h-11 w-full rounded-xl bg-white/15 text-sm"
           >

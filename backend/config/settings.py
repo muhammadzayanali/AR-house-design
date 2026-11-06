@@ -43,6 +43,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "planning.middleware.ApiRequestLogMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -139,6 +140,16 @@ LOGGING = {
         "planning.vision": {
             "handlers": ["console"],
             "level": "INFO",
+            "propagate": False,
+        },
+        "plotline.api": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
             "propagate": False,
         },
     },

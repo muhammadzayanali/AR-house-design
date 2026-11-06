@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${outfit.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${outfit.variable} ${fraunces.variable} antialiased`}
       suppressHydrationWarning
     >
       <body
