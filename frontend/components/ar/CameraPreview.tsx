@@ -7,9 +7,10 @@
  */
 
 import { Line } from "@react-three/drei";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ACESFilmicToneMapping,
   PerspectiveCamera,
   Plane,
   Quaternion,
@@ -128,28 +129,41 @@ function FrameLook({
   return null;
 }
 
-function Brightness({ video, onLevel }: { video: HTMLVideoElement | null; onLevel: (n: number) => void }) {
-  const sample = useRef<HTMLCanvasElement | null>(null);
-  const n = useRef(0);
-  useFrame(() => {
-    if (!video || video.readyState < 2) return;
-    n.current += 1;
-    if (n.current % 20 !== 0) return;
-    if (!sample.current) sample.current = document.createElement("canvas");
-    const c = sample.current;
-    c.width = 16;
-    c.height = 16;
-    const ctx = c.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, 16, 16);
-    const data = ctx.getImageData(0, 0, 16, 16).data;
-    let sum = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-    }
-    onLevel(sum / (16 * 16) / 255);
-  });
+function Exposure({ evening }: { evening: boolean }) {
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMapping = ACESFilmicToneMapping;
+    gl.toneMappingExposure = evening ? 0.9 : 1.15;
+  }, [gl, evening]);
   return null;
+}
+
+function PreviewLights({ evening }: { evening: boolean }) {
+  if (evening) {
+    return (
+      <>
+        <ambientLight intensity={0.14} />
+        <hemisphereLight args={["#1c2838", "#2a2118", 0.34]} />
+        <directionalLight position={[-10, 16, 8]} intensity={0.32} color="#b7c7de" />
+        <directionalLight position={[0, 5, 18]} intensity={0.2} color="#ffd7a8" />
+      </>
+    );
+  }
+  return (
+    <>
+      <ambientLight intensity={0.48} />
+      <hemisphereLight args={["#f7f4ee", "#cbb89a", 0.72]} />
+      <directionalLight
+        position={[9, 18, 14]}
+        intensity={1.65}
+        color="#fff6e8"
+        castShadow
+        shadow-mapSize={[512, 512]}
+      />
+      <directionalLight position={[0, 6, 20]} intensity={0.9} color="#fffaf4" />
+      <directionalLight position={[-12, 8, 6]} intensity={0.32} color="#d7e6f6" />
+    </>
+  );
 }
 
 function PlacedGroup({
@@ -157,30 +171,24 @@ function PlacedGroup({
   outline,
   position,
   yaw,
-  sun,
+  evening,
 }: {
   design: HouseDesign;
   outline: [number, number, number][];
   position: [number, number, number];
   yaw: number;
-  sun: number;
+  evening: boolean;
 }) {
   const ref = useRef<Group>(null);
   return (
     <group ref={ref} position={position} rotation={[0, yaw, 0]}>
-      <hemisphereLight args={["#dfe7ef", "#6a6458", 0.45 + sun * 0.35]} />
-      <directionalLight
-        position={[4, 8, 3]}
-        intensity={0.55 + sun * 0.9}
-        castShadow
-        shadow-mapSize={[512, 512]}
-      />
+      <PreviewLights evening={evening} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} receiveShadow>
         <planeGeometry args={[30, 30]} />
-        <shadowMaterial transparent opacity={0.4} />
+        <shadowMaterial transparent opacity={evening ? 0.55 : 0.35} />
       </mesh>
-      <Line points={outline} color="#e7c27a" lineWidth={2} />
-      <HouseRenderer design={design} arMode />
+      <Line points={outline} color={evening ? "#e7c27a" : "#f4efe6"} lineWidth={2} />
+      <HouseRenderer design={design} arMode evening={evening} />
     </group>
   );
 }
@@ -193,6 +201,8 @@ export function CameraPreview({
   webxrAvailable,
   onClose,
   onUseWebXR,
+  evening = false,
+  onEvening,
 }: {
   design: HouseDesign;
   points: WorldPoint[];
@@ -201,6 +211,8 @@ export function CameraPreview({
   webxrAvailable: boolean;
   onClose: () => void;
   onUseWebXR: () => void;
+  evening?: boolean;
+  onEvening?: (next: boolean) => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<(HTMLCanvasElement & { __camera?: PerspectiveCamera }) | null>(null);
@@ -222,7 +234,12 @@ export function CameraPreview({
   const [placed, setPlaced] = useState<[number, number, number]>([0, -1.5, -fit]);
   const [yaw, setYaw] = useState(0);
   const [notice, setNotice] = useState("");
-  const [sun, setSun] = useState(0.55);
+  const [eveningLocal, setEveningLocal] = useState(evening);
+  const night = onEvening ? evening : eveningLocal;
+  const setNight = (next: boolean) => {
+    if (onEvening) onEvening(next);
+    else setEveningLocal(next);
+  };
   const [experimental, setExperimental] = useState(false);
   const [crop, setCrop] = useState("");
   const slam = useMemo(() => new SlamPoseProvider(), []);
@@ -387,14 +404,14 @@ export function CameraPreview({
           setNotice("Placed. Drag to move. Twist to rotate. Scale stays 1:1.");
         }}
       >
+        <Exposure evening={night} />
         <FovLock video={videoEl} horizontalDeg={hfov} />
         <FrameLook
           active
           aim={[placed[0], placed[1] + houseHeight / 2, placed[2]]}
         />
         <GyroRig armed={motion === "on"} />
-        <Brightness video={videoEl} onLevel={setSun} />
-        <PlacedGroup design={design} outline={outline} position={placed} yaw={yaw} sun={sun} />
+        <PlacedGroup design={design} outline={outline} position={placed} yaw={yaw} evening={night} />
       </Canvas>
 
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-3 p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -426,6 +443,22 @@ export function CameraPreview({
                 Switch to WebXR
               </button>
             ) : null}
+            <div className="flex overflow-hidden rounded-full ring-1 ring-white/20" role="group" aria-label="Lighting">
+              <button
+                type="button"
+                onClick={() => setNight(false)}
+                className={`min-h-11 px-3 text-xs ${night ? "text-white" : "bg-white text-ink"}`}
+              >
+                Day
+              </button>
+              <button
+                type="button"
+                onClick={() => setNight(true)}
+                className={`min-h-11 px-3 text-xs ${night ? "bg-amber-200 text-ink" : "text-white"}`}
+              >
+                Night
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setExperimental((v) => !v)}

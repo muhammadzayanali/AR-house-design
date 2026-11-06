@@ -671,6 +671,8 @@ export default function ARExperience() {
           lengthM={lengthM}
           widthM={widthM}
           webxrAvailable={support.kind === "supported"}
+          evening={evening}
+          onEvening={setEvening}
           onClose={() => setCameraPreviewOpen(false)}
           onUseWebXR={() => {
             setCameraPreviewOpen(false);
