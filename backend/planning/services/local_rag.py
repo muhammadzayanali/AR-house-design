@@ -445,22 +445,11 @@ def _budget_sheet(facts: Dict[str, Any], *, include_lda: bool) -> str:
         return "\n".join(lines)
     lo, hi = bounds
     lines.append(
-        "Construction band stored on this design: {lo} – {hi}. "
-        "That is the building (structure and finishes) only. It is not a contractor quote or a BOQ."
+        "Primary basis: catalogue band stored on this design, {lo} – {hi}. "
+        "That is the building (structure and finishes) only. It is not a contractor quote or a BOQ. "
+        "A second rate (for example a Lahore rupee-per-square-foot figure) is not shown in this answer."
         .format(lo=_pkr(lo), hi=_pkr(hi))
     )
-    rate_cost = facts.get("cost_estimate") or {}
-    if rate_cost.get("min") and rate_cost.get("max"):
-        lines.append(
-            "A separate Lahore sq-ft reference on this footprint is {lo} – {hi} "
-            "at about PKR {rate}/sq ft. The band above is the catalog figure for {name}."
-            .format(
-                lo=_pkr(rate_cost["min"]),
-                hi=_pkr(rate_cost["max"]),
-                rate=rate_cost.get("reference_rate_pkr_per_sqft") or "—",
-                name=name,
-            )
-        )
     if include_lda and illus:
         low_total = lo + illus["ground_pkr"]
         high_total = hi + illus["total_pkr"]
@@ -695,25 +684,21 @@ def synthesize_answer(
         if re.search(r"budget|construction", q):
             return _budget_sheet(facts, include_lda=False)
         cost = facts.get("cost_estimate") or {}
-        if cost.get("min") and cost.get("max"):
+        if cost.get("min") and cost.get("max") and not (facts.get("estimated_cost_min") and facts.get("estimated_cost_max")):
             return (
-                "Preliminary Lahore reference construction estimate for ~{cov} m² "
-                "covered area (~{sqft} sq ft) at about PKR {rate}/sq ft: "
+                "Primary basis: Lahore reference construction estimate for ~{cov} m² "
+                "covered area (~{sqft} sq ft): "
                 "PKR {lo:,.0f}–{hi:,.0f} ({quality}). "
-                "Catalog list price for {name} is separately {catalog}. "
-                "Both are preliminary construction estimates — not quotations. "
-                "LDA tax, map-approval fees, stamp duty, property tax, and utility "
-                "connections are not inside this band. "
+                "No catalogue band is stored for {name}, so that reference is the only range in this answer. "
+                "It is not a quotation. LDA tax and other authority fees are not inside it. "
                 "{disclaimer}"
                 .format(
                     cov=cost.get("covered_area_m2") or "—",
                     sqft=cost.get("covered_area_sqft") or "—",
-                    rate=cost.get("reference_rate_pkr_per_sqft") or "—",
                     lo=float(cost["min"]),
                     hi=float(cost["max"]),
                     quality=cost.get("quality") or "standard",
                     name=name,
-                    catalog=_fmt_cost(facts),
                     disclaimer=cost.get("disclaimer")
                     or "Costs vary with city, materials, labour and design complexity.",
                 )

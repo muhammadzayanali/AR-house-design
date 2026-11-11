@@ -4,9 +4,8 @@
  * Points are Three.js world coordinates (y-up). We project onto the XZ
  * ground plane and ignore height, because the plot is a 2D land parcel.
  *
- * 2 points → treat as the diagonal of an axis-aligned rectangle on XZ
- * 3 points → triangle (shoelace)
- * 4 points → quadrilateral (shoelace). Tap corners in order around the plot.
+ * 2 points are not a plot. Use length × width, or mark a third corner.
+ * 3 or more points use the shoelace formula. Crossed or collinear corners are rejected.
  */
 import type { WorldPoint } from "@/lib/types";
 
@@ -28,17 +27,75 @@ export function perimeterXZ(points: WorldPoint[]) {
   return sum;
 }
 
-export function areaSqmFromPoints(points: WorldPoint[]) {
-  if (points.length < 2) return 0;
-  if (points.length === 2) {
-    const width = Math.abs(points[0].x - points[1].x);
-    const depth = Math.abs(points[0].z - points[1].z);
-    const area = width * depth;
-    if (area > 0.5) return area;
-    const span = distanceXZ(points[0], points[1]);
-    return span * span;
+export type PolygonStatus = "empty" | "need_third_corner" | "collinear" | "self_intersecting" | "ok";
+
+export type PolygonAssessment = {
+  status: PolygonStatus;
+  areaSqm: number;
+  message: string;
+};
+
+function cross(o: WorldPoint, a: WorldPoint, b: WorldPoint) {
+  return (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+}
+
+function segmentsCross(a: WorldPoint, b: WorldPoint, c: WorldPoint, d: WorldPoint) {
+  const o1 = cross(a, b, c);
+  const o2 = cross(a, b, d);
+  const o3 = cross(c, d, a);
+  const o4 = cross(c, d, b);
+  if (o1 === 0 || o2 === 0 || o3 === 0 || o4 === 0) return false;
+  return o1 > 0 !== o2 > 0 && o3 > 0 !== o4 > 0;
+}
+
+function selfIntersects(points: WorldPoint[]) {
+  const n = points.length;
+  if (n < 4) return false;
+  for (let i = 0; i < n; i += 1) {
+    const a = points[i];
+    const b = points[(i + 1) % n];
+    for (let j = i + 1; j < n; j += 1) {
+      if (Math.abs(i - j) <= 1 || Math.abs(i - j) === n - 1) continue;
+      const c = points[j];
+      const d = points[(j + 1) % n];
+      if (segmentsCross(a, b, c, d)) return true;
+    }
   }
-  return shoelaceXZ(points);
+  return false;
+}
+
+/** Two points are not a plot. Length × width stays a separate manual entry. */
+export function assessPolygon(points: WorldPoint[]): PolygonAssessment {
+  if (points.length < 2) {
+    return { status: "empty", areaSqm: 0, message: "Mark at least three corners." };
+  }
+  if (points.length === 2) {
+    return {
+      status: "need_third_corner",
+      areaSqm: 0,
+      message: "Two corners are not a plot. Mark a third corner, or use length × width.",
+    };
+  }
+  if (selfIntersects(points)) {
+    return {
+      status: "self_intersecting",
+      areaSqm: 0,
+      message: "Those corners cross. Tap them in order around the boundary.",
+    };
+  }
+  const area = shoelaceXZ(points);
+  if (area < 0.05) {
+    return {
+      status: "collinear",
+      areaSqm: 0,
+      message: "Those corners are almost in a line. Walk the boundary, not a single edge.",
+    };
+  }
+  return { status: "ok", areaSqm: area, message: "" };
+}
+
+export function areaSqmFromPoints(points: WorldPoint[]) {
+  return assessPolygon(points).areaSqm;
 }
 
 function shoelaceXZ(points: WorldPoint[]) {

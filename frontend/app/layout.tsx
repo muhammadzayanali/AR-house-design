@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Outfit } from "next/font/google";
 
+import { DebugOverlay } from "@/components/debug/DebugOverlay";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import "./globals.css";
@@ -50,6 +51,7 @@ export default function RootLayout({
         <AuthProvider>
           <SiteHeader />
           <div className="flex flex-1 flex-col">{children}</div>
+          <DebugOverlay />
         </AuthProvider>
       </body>
     </html>

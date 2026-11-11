@@ -17,7 +17,10 @@ import {
   type Material,
 } from "three";
 
+import { metreBoxGeometry } from "@/lib/geometry/metreBox";
+
 import type { HouseConfig } from "./materials";
+import { grassMap, plasterMaps, stonePaveMap, timberMap } from "./surfaceTextures";
 
 function M({
   position,
@@ -34,6 +37,10 @@ function M({
   receiveShadow?: boolean;
   rotation?: [number, number, number];
 }) {
+  const geometry = useMemo(
+    () => metreBoxGeometry(args[0], args[1], args[2]),
+    [args[0], args[1], args[2]],
+  );
   return (
     <mesh
       position={position}
@@ -41,9 +48,8 @@ function M({
       castShadow={castShadow}
       receiveShadow={receiveShadow}
       material={material}
-    >
-      <boxGeometry args={args} />
-    </mesh>
+      geometry={geometry}
+    />
   );
 }
 
@@ -129,6 +135,8 @@ function GlassPanel({
       <M position={[w / 2 - frameT / 2, 0, d * 0.15]} args={[frameT, h, frameT]} material={frame} castShadow={false} />
       <M position={[0, 0, d * 0.15]} args={[frameT * 0.8, h, frameT]} material={frame} castShadow={false} />
       <M position={[0, 0, d * 0.15]} args={[w, frameT * 0.8, frameT]} material={frame} castShadow={false} />
+      <M position={[0, -h / 2 - 0.04, d * 0.2]} args={[w + 0.12, 0.06, 0.1]} material={frame} castShadow={false} />
+      <M position={[0, h / 2 + 0.035, d * 0.2]} args={[w + 0.08, 0.05, 0.08]} material={frame} castShadow={false} />
     </group>
   );
 }
@@ -233,6 +241,9 @@ function SiteDressing({
       <M position={[0, wallH / 2, -hd]} args={[hw * 2, wallH, 0.16]} material={concrete} />
       <M position={[-hw, wallH / 2, 0]} args={[0.16, wallH, hd * 2]} material={concrete} />
       <M position={[hw, wallH / 2, 0]} args={[0.16, wallH, hd * 2]} material={concrete} />
+      <M position={[0, wallH + 0.05, -hd]} args={[hw * 2, 0.08, 0.22]} material={dark} castShadow={false} />
+      <M position={[-hw, wallH + 0.05, 0]} args={[0.22, 0.08, hd * 2]} material={dark} castShadow={false} />
+      <M position={[hw, wallH + 0.05, 0]} args={[0.22, 0.08, hd * 2]} material={dark} castShadow={false} />
       {/* Driveway in front of the house, darker than the lawn */}
       <M
         position={[0, 0.06, hd * 0.55]}
@@ -253,10 +264,18 @@ function SiteDressing({
         [hw - 1.6, hd - 2.2],
       ].map(([x, z], i) => (
         <group key={i} position={[x, 0, z]}>
-          <M position={[0, 0.7, 0]} args={[0.18, 1.4, 0.18]} material={dark} castShadow={false} />
-          <mesh position={[0, 1.7, 0]} castShadow={false}>
-            <coneGeometry args={[0.7, 1.5, 6]} />
+          <M position={[0, 0.85, 0]} args={[0.16, 1.7, 0.16]} material={dark} castShadow={false} />
+          <mesh position={[0, 2.15, 0]} castShadow={false}>
+            <icosahedronGeometry args={[0.85, 1]} />
             <meshStandardMaterial color={i === 1 ? "#3e6b45" : "#2f5a3a"} roughness={1} />
+          </mesh>
+          <mesh position={[0.45, 1.7, 0.1]} castShadow={false}>
+            <icosahedronGeometry args={[0.4, 0]} />
+            <meshStandardMaterial color="#2a5334" roughness={1} />
+          </mesh>
+          <mesh position={[0.9, 0.28, 0.4]} castShadow={false}>
+            <icosahedronGeometry args={[0.28, 0]} />
+            <meshStandardMaterial color="#3d6a3a" roughness={1} />
           </mesh>
         </group>
       ))}
@@ -290,9 +309,14 @@ export function ModernReferenceHouse({
   const parapet = 0.28;
 
   const mats = useMemo(() => {
+    const plasterTex = plasterMaps("#ebe6df");
     const plaster = new MeshStandardMaterial({
-      color: "#ebe6df",
-      roughness: 0.78,
+      name: "plaster",
+      color: "#ffffff",
+      map: plasterTex.map,
+      bumpMap: plasterTex.bump,
+      bumpScale: 0.03,
+      roughness: 0.82,
       metalness: 0.02,
     });
     const concrete = new MeshStandardMaterial({
@@ -353,18 +377,24 @@ export function ModernReferenceHouse({
       emissiveIntensity: evening ? 0.85 : 0,
     });
     const grass = new MeshStandardMaterial({
-      color: "#4f7a45",
+      name: "grass",
+      color: "#ffffff",
+      map: grassMap(),
       roughness: 1,
       metalness: 0,
     });
     const stone = new MeshStandardMaterial({
-      color: "#8d8680",
+      name: "stone",
+      color: "#ffffff",
+      map: stonePaveMap(),
       roughness: 0.92,
       metalness: 0.02,
     });
     const timber = new MeshStandardMaterial({
-      color: "#6e4a32",
-      roughness: 0.74,
+      name: "timber",
+      color: "#ffffff",
+      map: timberMap(),
+      roughness: 0.78,
       metalness: 0.04,
     });
     const glow = new MeshStandardMaterial({
@@ -470,6 +500,11 @@ export function ModernReferenceHouse({
         <M position={[w * 0.2, 0.55, d * 0.05 - 0.35]} args={[2.0, 0.55, 0.2]} material={mats.fabric} castShadow={false} />
         <M position={[0, groundH * 0.92, 0]} args={[w * 0.7, 0.04, d * 0.5]} material={mats.warm} castShadow={false} />
         <M position={[-w * 0.28, 0.42, -d * 0.22]} args={[1.8, 0.4, 2.1]} material={mats.fabric} castShadow={false} />
+        {floors > 1 && (
+          <M position={[0, groundH + 0.45, -d * 0.12]} args={[1.9, 0.32, 1.2]} material={mats.fabric} castShadow={false} />
+        )}
+        <M position={[-w * 0.12, groundH * 0.55, frontZ - 0.35]} args={[0.06, groundH * 0.55, 0.04]} material={mats.fabric} castShadow={false} />
+        <M position={[w * 0.12, groundH * 0.55, frontZ - 0.35]} args={[0.06, groundH * 0.55, 0.04]} material={mats.fabric} castShadow={false} />
         {[-0.4, 0.4].map((dx) => (
           <M
             key={`spot-${dx}`}

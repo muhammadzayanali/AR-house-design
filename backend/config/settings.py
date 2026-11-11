@@ -12,14 +12,14 @@ load_dotenv(ROOT_DIR / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
-    if host.strip()
-]
-# Phones on LAN will hit Next.js, which proxies here. Still allow common hosts.
-if DEBUG:
-    ALLOWED_HOSTS += ["0.0.0.0", "*"]
+from config.runtime_hosts import resolve_hosts
+
+_HOSTS = resolve_hosts(
+    DEBUG,
+    os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost"),
+    os.getenv("CORS_ALLOWED_ORIGINS", ""),
+)
+ALLOWED_HOSTS = _HOSTS["hosts"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -89,7 +89,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 APPEND_SLASH = True
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = _HOSTS["cors_allow_all"]
+CORS_ALLOWED_ORIGINS = _HOSTS["cors_origins"]
 CORS_ALLOW_CREDENTIALS = True
 # Needed when the browser calls *.loca.lt with Bypass-Tunnel-Reminder.
 CORS_ALLOW_HEADERS = list(default_headers) + [

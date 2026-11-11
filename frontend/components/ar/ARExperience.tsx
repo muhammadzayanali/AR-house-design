@@ -22,7 +22,7 @@ import {
 import { PlanningResultPanel } from "@/components/planning/PlanningResultPanel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/lib/api";
-import { areaSqmFromPoints } from "@/lib/geometry/area";
+import { areaSqmFromPoints, assessPolygon } from "@/lib/geometry/area";
 import {
   clearProjectDraft,
   resolveValidDraft,
@@ -184,6 +184,7 @@ export default function ARExperience() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot after login
   }, [authReady, user]);
 
+  const polygon = useMemo(() => assessPolygon(points), [points]);
   const liveArea = useMemo(() => {
     if (manualSqm != null && (phase === "setup" || points.length === 0)) return manualSqm;
     const fromPoints = areaSqmFromPoints(points);
@@ -512,6 +513,7 @@ export default function ARExperience() {
       error={error}
       busy={busy}
       points={points}
+      polygonMessage={points.length >= 2 && polygon.status !== "ok" ? polygon.message : ""}
       units={units}
       recommendation={recommendation}
       feasibility={feasibility}
@@ -530,6 +532,7 @@ export default function ARExperience() {
       onUndo={() => setPoints((p) => p.slice(0, -1))}
       onReset={resetAll}
       onFinishMeasure={() => {
+        if (polygon.status !== "ok") return;
         setMeasurementMethod("ar");
         setMeasurementQuality("");
         setCalibrationMethod("");
@@ -693,6 +696,7 @@ function Hud(p: {
   error: string | null;
   busy: boolean;
   points: WorldPoint[];
+  polygonMessage: string;
   units: LandUnits;
   recommendation: RecommendResponse | null;
   feasibility: Feasibility | null;
@@ -887,6 +891,9 @@ function Hud(p: {
           <span className="mt-1 block text-xs text-stone">
             {p.units.sqm.toFixed(1)} m² · {p.units.marla.toFixed(2)} Marla
           </span>
+          {p.polygonMessage ? (
+            <span className="mt-1 block text-xs text-amber-100">{p.polygonMessage}</span>
+          ) : null}
         </p>
       )}
 
@@ -981,7 +988,7 @@ function Hud(p: {
           </button>
           <button
             type="button"
-            disabled={p.points.length < 3 || p.busy}
+            disabled={p.points.length < 3 || p.busy || Boolean(p.polygonMessage)}
             onClick={p.onFinishMeasure}
             className="rounded-xl bg-paper py-3 text-sm font-medium text-ink disabled:bg-white/10 disabled:text-stone"
           >

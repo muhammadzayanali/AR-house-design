@@ -47,11 +47,13 @@ export function StylePicker({
         <div className="rounded-2xl bg-gradient-to-br from-white/[0.07] to-white/[0.02] p-3.5 ring-1 ring-white/10">
           <p className="text-sm font-medium text-paper">Rough space estimate</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Chip>{preliminary.estimate.bedrooms} beds</Chip>
-            <Chip>{preliminary.estimate.bathrooms} baths</Chip>
             <Chip>Kitchen {preliminary.estimate.kitchen}</Chip>
             <Chip>Parking {preliminary.estimate.parking}</Chip>
           </div>
+          <p className="mt-2 text-[11px] leading-snug text-stone/90">
+            Bedroom and bathroom counts are the ones stored on the design you pick. This plot-size
+            guide does not show a second count.
+          </p>
           {preliminary.disclaimer && (
             <p className="mt-2 text-[11px] leading-snug text-stone/90">
               {preliminary.disclaimer}

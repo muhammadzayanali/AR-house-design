@@ -1,0 +1,3 @@
+aerial_grass_rock
+CC0 1.0 — Poly Haven (polyhaven.com)
+Maps: albedo, normal (OpenGL), roughness. 1K WebP.

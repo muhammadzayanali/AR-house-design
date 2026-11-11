@@ -72,7 +72,19 @@ export default function CreditsPage() {
       <section className="mt-10 space-y-2 text-sm text-muted">
         <h2 className="font-serif text-xl text-ink">Environment / tools</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>drei Environment presets (apartment) for PBR reflections in the desktop viewer.</li>
+          <li>
+            Poly Haven CC0 1K WebP maps in <code>/textures/cc0</code>: plastered_wall_04,
+            roof_tiles_14, stone_wall_02, wood_planks, cobblestone_floor_001, aerial_grass_rock.
+            Each set is albedo, OpenGL normal, and roughness.             Canvas textures paint the first frame. Desktop then loads the 1K WebP maps. Phones load
+            the 512 px set, because eighteen 1K maps are about 96 MB uncompressed and the phone
+            budget is about 40 MB. Phones do not download the HDR. If the frame rate stays under
+            30, the canvas maps come back. KTX2 was not packed; this build has no Basis encoder.
+          </li>
+          <li>
+            Poly Haven CC0 1K HDR: Lebombo for Day, Venice Sunset for Evening, desktop only.
+            ACES tone mapping, a sun, and contact shadows are on every screen. Phones do not
+            download the HDR.
+          </li>
           <li>Draco / meshopt decoders self-hosted under <code>/public/draco</code> (Three.js).</li>
           <li>Reference look for Modern: <code>docs/reference/house-reference.png</code> (not shipped as a model).</li>
           <li>

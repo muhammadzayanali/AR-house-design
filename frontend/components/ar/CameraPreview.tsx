@@ -22,6 +22,7 @@ import {
 
 import { HouseRenderer } from "@/components/architecture/ArchViewer";
 import { OrientationFilter, requestMotionPermission, screenOrientationAngle } from "@/lib/ar/deviceOrientation";
+import { footprintInside, type PlotPoint } from "@/lib/ar/plotClamp";
 import { SlamPoseProvider } from "@/lib/ar/poseProvider";
 import { fitStandOff, visiblePerspective } from "@/lib/ar/previewFov";
 import type { HouseDesign, WorldPoint } from "@/lib/types";
@@ -168,27 +169,26 @@ function PreviewLights({ evening }: { evening: boolean }) {
 
 function PlacedGroup({
   design,
-  outline,
   position,
   yaw,
   evening,
 }: {
   design: HouseDesign;
-  outline: [number, number, number][];
   position: [number, number, number];
   yaw: number;
   evening: boolean;
 }) {
   const ref = useRef<Group>(null);
   return (
-    <group ref={ref} position={position} rotation={[0, yaw, 0]}>
+    <group ref={ref} position={position}>
       <PreviewLights evening={evening} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} receiveShadow>
         <planeGeometry args={[30, 30]} />
         <shadowMaterial transparent opacity={evening ? 0.55 : 0.35} />
       </mesh>
-      <Line points={outline} color={evening ? "#e7c27a" : "#f4efe6"} lineWidth={2} />
-      <HouseRenderer design={design} arMode evening={evening} />
+      <group rotation={[0, yaw, 0]}>
+        <HouseRenderer design={design} arMode evening={evening} />
+      </group>
     </group>
   );
 }
@@ -231,7 +231,14 @@ export function CameraPreview({
   const [heightM, setHeightM] = useState(1.5);
   const [hfov, setHfov] = useState(60);
   const [distance, setDistance] = useState(fit);
-  const [placed, setPlaced] = useState<[number, number, number]>([0, -1.5, -fit]);
+  const [facingMode, setFacingMode] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [gyroLive, setGyroLive] = useState(false);
+  const [forceTap, setForceTap] = useState(false);
+  const facingMissing = cameraReady && (facingMode == null || facingMode === "");
+  const tapToPlace = forceTap || (gyroLive && (facingMode === "environment" || facingMissing));
+  const [plotAnchor, setPlotAnchor] = useState<[number, number, number] | null>([0, -1.5, -fit]);
+  const [placed, setPlaced] = useState<[number, number, number] | null>([0, -1.5, -fit]);
   const [yaw, setYaw] = useState(0);
   const [notice, setNotice] = useState("");
   const [eveningLocal, setEveningLocal] = useState(evening);
@@ -247,6 +254,55 @@ export function CameraPreview({
     () => outlineXZ(points, Number(lengthM), Number(widthM)),
     [points, lengthM, widthM],
   );
+  const plotPolygon = useMemo<PlotPoint[]>(() => {
+    const unique = outline.slice(0, -1);
+    return unique.map(([x, , z]) => ({ x, z }));
+  }, [outline]);
+
+  function insidePlot(next: [number, number, number]) {
+    if (!plotAnchor) return true;
+    const width = design.building_width_m || 10;
+    const depth = design.building_depth_m || 10;
+    const ox = next[0] - plotAnchor[0];
+    const oz = next[2] - plotAnchor[2];
+    if (footprintInside(plotPolygon, ox, oz, yaw, width, depth)) return true;
+    const centered = footprintInside(plotPolygon, 0, 0, yaw, width, depth);
+    return !centered && Math.hypot(ox, oz) < 0.05;
+  }
+
+  useEffect(() => {
+    const onEvent = (event: DeviceOrientationEvent) => {
+      if (event.beta == null || event.gamma == null) return;
+      if (event.alpha === 0 && event.beta === 0 && event.gamma === 0) return;
+      setGyroLive(true);
+    };
+    window.addEventListener("deviceorientation", onEvent);
+    window.addEventListener("deviceorientationabsolute", onEvent as EventListener);
+    return () => {
+      window.removeEventListener("deviceorientation", onEvent);
+      window.removeEventListener("deviceorientationabsolute", onEvent as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const record = window as Window & {
+      __plotlineCamera?: { facingMode: string; orientationFiring: boolean; tapToPlace: boolean };
+    };
+    record.__plotlineCamera = {
+      facingMode: facingMode || "",
+      orientationFiring: gyroLive,
+      tapToPlace,
+    };
+  }, [facingMode, gyroLive, tapToPlace]);
+
+  useEffect(() => {
+    if (!tapToPlace) return;
+    setPlaced(null);
+    setPlotAnchor(null);
+    setNotice(
+      `${design.name} waits for a tap on the ground. Phone height starts at 1.5 m. Approximate placement. Scale stays 1:1.`,
+    );
+  }, [tapToPlace, design.name]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -268,6 +324,8 @@ export function CameraPreview({
         stream = next;
         video.srcObject = next;
         const facing = next.getVideoTracks()[0]?.getSettings?.().facingMode;
+        setFacingMode(facing || null);
+        setCameraReady(true);
         if (facing === "user") {
           setNotice(
             `${design.name} is shown at real size. This browser opened the front camera, so you see yourself. On a phone, choose the rear camera and look at the floor.`,
@@ -275,7 +333,9 @@ export function CameraPreview({
         }
         void video.play().catch(() => setStreamError("The camera did not start."));
       })
-      .catch(() => setStreamError("Camera permission was denied."));
+      .catch(() => {
+        setStreamError("Camera permission was denied.");
+      });
     const onMeta = () => {
       const box = video.getBoundingClientRect();
       const vis = visiblePerspective(video.videoWidth, video.videoHeight, box.width, box.height, hfov);
@@ -292,14 +352,16 @@ export function CameraPreview({
   }, []);
 
   useEffect(() => {
-    setPlaced((current) => [current[0], -heightM, current[2]]);
+    setPlaced((current) => (current ? [current[0], -heightM, current[2]] : current));
   }, [heightM]);
 
   useEffect(() => {
     setNotice(
-      `${design.name} is framed at real size. Drag Zoom out until the whole house fits. On a computer this picture is your webcam, not the floor.`,
+      tapToPlace
+        ? `${design.name} waits for a tap on the ground. Phone height starts at 1.5 m. Approximate placement. Scale stays 1:1.`
+        : `${design.name} is framed at real size. Drag Zoom out until the whole house fits. On a computer this picture is your webcam, not the floor.`,
     );
-  }, [design.name]);
+  }, [design.name, tapToPlace]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -385,7 +447,13 @@ export function CameraPreview({
           if (Math.hypot(event.clientX - drag.current.x, event.clientY - drag.current.y) < 12) return;
           drag.current.moved = true;
           const hit = hitFromEvent(event);
-          if (hit && hit !== "horizon") setPlaced(hit);
+          if (hit && hit !== "horizon") {
+            if (!insidePlot(hit)) {
+              setNotice("The house stays inside the plot.");
+              return;
+            }
+            setPlaced(hit);
+          }
         }}
         onPointerUp={(event) => {
           const moved = drag.current?.moved;
@@ -400,24 +468,45 @@ export function CameraPreview({
             setNotice("Could not find the ground from that tap.");
             return;
           }
+          if (!plotAnchor) setPlotAnchor(hit);
+          if (plotAnchor && !insidePlot(hit)) {
+            setNotice("The house stays inside the plot.");
+            return;
+          }
           setPlaced(hit);
-          setNotice("Placed. Drag to move. Twist to rotate. Scale stays 1:1.");
+          setNotice(
+            "Approximate placement. The plot stays on the ground and the house stays inside it. Drag to align. Twist to turn. Scale stays 1:1.",
+          );
         }}
       >
         <Exposure evening={night} />
         <FovLock video={videoEl} horizontalDeg={hfov} />
         <FrameLook
           active
-          aim={[placed[0], placed[1] + houseHeight / 2, placed[2]]}
+          aim={[
+            placed ? placed[0] : 0,
+            (placed ? placed[1] : -heightM) + houseHeight / 2,
+            placed ? placed[2] : -distance,
+          ]}
         />
         <GyroRig armed={motion === "on"} />
-        <PlacedGroup design={design} outline={outline} position={placed} yaw={yaw} evening={night} />
+        {plotAnchor ? (
+          <Line
+            points={outline}
+            position={plotAnchor}
+            color={night ? "#e7c27a" : "#f4efe6"}
+            lineWidth={2}
+          />
+        ) : null}
+        {placed ? (
+          <PlacedGroup design={design} position={placed} yaw={yaw} evening={night} />
+        ) : null}
       </Canvas>
 
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-3 p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="ar-scroll pointer-events-auto max-h-[38svh] space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="rounded-full bg-black/70 px-3 py-2 text-xs">Camera preview — approximate placement</p>
+            <p className="rounded-full bg-black/70 px-3 py-2 text-xs">Approximate placement</p>
             <button type="button" onClick={onClose} className="min-h-11 rounded-full bg-black/70 px-4 text-sm">
               Close
             </button>
@@ -461,6 +550,13 @@ export function CameraPreview({
             </div>
             <button
               type="button"
+              onClick={() => setForceTap((value) => !value)}
+              className={`min-h-11 rounded-full px-3 text-xs ${tapToPlace ? "bg-amber-200 text-ink" : "bg-white/15"}`}
+            >
+              {tapToPlace ? "Tap-to-place on" : "Use tap-to-place"}
+            </button>
+            <button
+              type="button"
               onClick={() => setExperimental((v) => !v)}
               className={`min-h-11 rounded-full px-3 text-xs ${experimental ? "bg-amber-200 text-ink" : "bg-white/15"}`}
             >
@@ -492,7 +588,11 @@ export function CameraPreview({
               onChange={(e) => {
                 const next = Number(e.target.value);
                 setDistance(next);
-                setPlaced([0, -heightM, -next]);
+                if (!tapToPlace) {
+                  const framed: [number, number, number] = [0, -heightM, -next];
+                  setPlaced(framed);
+                  setPlotAnchor(framed);
+                }
               }}
               className="w-40"
             />
@@ -537,7 +637,14 @@ export function CameraPreview({
             type="button"
             onClick={() => {
             setDistance(fit);
-            setPlaced([0, -heightM, -fit]);
+            if (tapToPlace) {
+              setPlaced(null);
+              setPlotAnchor(null);
+            } else {
+              const framed: [number, number, number] = [0, -heightM, -fit];
+              setPlaced(framed);
+              setPlotAnchor(framed);
+            }
             setYaw(0);
             setNotice(`${design.name} is framed again. Drag Zoom out if you want more of the site.`);
             }}

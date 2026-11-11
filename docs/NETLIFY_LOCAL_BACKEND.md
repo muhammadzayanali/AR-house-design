@@ -30,13 +30,18 @@ Also set `DJANGO_ORIGIN` to the same tunnel URL (used by the media proxy). Keep 
 
 ## Reliable demo without Netlify
 
-Same Wi‑Fi:
+Leave `NEXT_PUBLIC_API_ORIGIN` unset so the browser calls same-origin `/api`. Next proxies that to Django (`DJANGO_ORIGIN`, default `http://127.0.0.1:8000`).
 
-```text
-http://192.168.2.105:3000
+```bash
+# Terminal A
+cd backend && ../.venv/bin/python manage.py runserver 0.0.0.0:8000
+
+# Terminal B — planner on the LAN. WebXR needs the https script.
+cd frontend && npm run dev
+# or: npm run dev:https
 ```
 
-(Local Next rewrites `/api` → Django on the laptop.)
+Same Wi-Fi: `http://<this-laptop-ip>:3000`. On 12 Nov 2026 this laptop was `192.168.2.104`, and `http://192.168.2.104:3000/api/health/` returned 200 through the Next proxy. Phone hotspot: join the hotspot from the laptop, then open the laptop’s address on that network. That variant was not run. `npm run dev:https` is the script that can start the camera and WebXR; it was not started here because port 3000 was already the HTTP dev server.
 
 ## Netlify build settings
 

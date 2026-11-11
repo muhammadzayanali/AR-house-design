@@ -3,9 +3,12 @@
 import { useMemo } from "react";
 import { ExtrudeGeometry, MeshStandardMaterial, Shape, type Material } from "three";
 
+import { metreBoxGeometry } from "@/lib/geometry/metreBox";
+
 import type { HouseConfig } from "./materials";
 import { useArchMaterials } from "./materials";
 import { ModernReferenceHouse } from "./ModernReferenceHouse";
+import { plasterMaps, roofTileMap } from "./surfaceTextures";
 
 function Box({
   position,
@@ -22,6 +25,10 @@ function Box({
   receiveShadow?: boolean;
   rotation?: [number, number, number];
 }) {
+  const geometry = useMemo(
+    () => metreBoxGeometry(args[0], args[1], args[2]),
+    [args[0], args[1], args[2]],
+  );
   return (
     <mesh
       position={position}
@@ -29,9 +36,8 @@ function Box({
       castShadow={castShadow}
       receiveShadow={receiveShadow}
       material={material}
-    >
-      <boxGeometry args={args} />
-    </mesh>
+      geometry={geometry}
+    />
   );
 }
 
@@ -65,6 +71,14 @@ function GableRoof({
     g.translate(0, 0, -(width + overhang * 2) / 2);
     g.rotateY(Math.PI / 2);
     g.computeVertexNormals();
+    const pos = g.attributes.position;
+    const uv = g.attributes.uv;
+    if (uv) {
+      for (let i = 0; i < pos.count; i++) {
+        uv.setXY(i, pos.getX(i) * 0.85, pos.getZ(i) * 0.85 + pos.getY(i) * 0.55);
+      }
+      uv.needsUpdate = true;
+    }
     return g;
   }, [width, depth, rise, overhang]);
 
@@ -106,8 +120,10 @@ function RecessedWindow({
     <group position={[x, y, z]} rotation={[0, rotationY, 0]}>
       <Box position={[0, 0, 0]} args={[w + 0.18, h + 0.18, 0.1]} material={trim} />
       <Box position={[0, 0, 0.04]} args={[w, h, 0.06]} material={glass} castShadow={false} />
-      <Box position={[0, 0, 0.07]} args={[0.05, h, 0.04]} material={trim} castShadow={false} />
-      <Box position={[0, 0, 0.07]} args={[w, 0.05, 0.04]} material={trim} castShadow={false} />
+      <Box position={[-w * 0.22, 0, 0.07]} args={[0.045, h, 0.04]} material={trim} castShadow={false} />
+      <Box position={[w * 0.22, 0, 0.07]} args={[0.045, h, 0.04]} material={trim} castShadow={false} />
+      <Box position={[0, 0, 0.07]} args={[w, 0.045, 0.04]} material={trim} castShadow={false} />
+      <Box position={[0, h / 2 + 0.08, 0.06]} args={[w + 0.22, 0.08, 0.16]} material={trim} />
       {withShutters && shutter && (
         <>
           <Box position={[-(w / 2 + 0.22), 0, 0.02]} args={[0.28, h + 0.05, 0.06]} material={shutter} />
@@ -190,11 +206,14 @@ function Tree({ x, z, trunk, canopy }: { x: number; z: number; trunk: Material; 
       <mesh position={[0, 0.7, 0]} castShadow material={trunk}>
         <cylinderGeometry args={[0.12, 0.18, 1.4, 8]} />
       </mesh>
-      <mesh position={[0, 2.1, 0]} castShadow material={canopy}>
-        <sphereGeometry args={[1.05, 12, 10]} />
+      <mesh position={[0, 2.05, 0]} castShadow material={canopy}>
+        <icosahedronGeometry args={[0.95, 1]} />
       </mesh>
-      <mesh position={[0.35, 2.4, 0.2]} castShadow material={canopy}>
-        <sphereGeometry args={[0.7, 10, 8]} />
+      <mesh position={[0.55, 1.7, 0.15]} castShadow material={canopy}>
+        <icosahedronGeometry args={[0.55, 0]} />
+      </mesh>
+      <mesh position={[-0.4, 1.55, -0.2]} castShadow material={canopy}>
+        <icosahedronGeometry args={[0.42, 0]} />
       </mesh>
     </group>
   );
@@ -261,21 +280,32 @@ export function ArchitecturalHouse({
       }),
     [],
   );
-  const terracotta = useMemo(
+  const terracotta = useMemo(() => {
+    const tiles = roofTileMap(8);
+    return new MeshStandardMaterial({
+      color: "#ffffff",
+      map: tiles,
+      roughness: 0.88,
+      metalness: 0.03,
+    });
+  }, []);
+  const stoneLite = useMemo(() => {
+    const stone = plasterMaps("#d9d0c2", 3);
+    return new MeshStandardMaterial({
+      color: "#ffffff",
+      map: stone.map,
+      bumpMap: stone.bump,
+      bumpScale: 0.04,
+      roughness: 0.86,
+      metalness: 0.02,
+    });
+  }, []);
+  const foliage = useMemo(
     () =>
       new MeshStandardMaterial({
-        color: "#a0452c",
-        roughness: 0.78,
-        metalness: 0.04,
-      }),
-    [],
-  );
-  const stoneLite = useMemo(
-    () =>
-      new MeshStandardMaterial({
-        color: "#d8cfc0",
-        roughness: 0.82,
-        metalness: 0.03,
+        color: "#2f6a38",
+        roughness: 0.95,
+        metalness: 0,
       }),
     [],
   );
@@ -368,6 +398,9 @@ export function ArchitecturalHouse({
         <group position={[w * 0.52 + 0.4, 0.35, frontZ * 0.15]}>
           <Box position={[0, 1.45, 0]} args={[4.4, 2.9, 5.8]} material={mats.wall} />
           <Box position={[0, 1.2, 2.92]} args={[3.3, 2.15, 0.14]} material={mats.dark} />
+          {[0.4, 0.9, 1.4, 1.9].map((y) => (
+            <Box key={`gate-${y}`} position={[0, y, 3.02]} args={[3.05, 0.06, 0.04]} material={mats.trim} />
+          ))}
           {pitched && (
             <GableRoof
               width={4.6}
@@ -383,14 +416,19 @@ export function ArchitecturalHouse({
 
       {/* Roof */}
       {pitched ? (
-        <GableRoof
-          width={w}
-          depth={d}
-          eaveY={totalH + 0.35}
-          rise={isCottage ? 2.0 : isItalian ? 2.45 : 2.2}
-          material={isItalian ? terracotta : mats.roof}
-          overhang={0.55}
-        />
+        <>
+          <GableRoof
+            width={w}
+            depth={d}
+            eaveY={totalH + 0.35}
+            rise={isCottage ? 2.0 : isItalian ? 2.45 : 2.2}
+            material={isItalian ? terracotta : mats.roof}
+            overhang={0.55}
+          />
+          <Box position={[0, totalH + 0.28, frontZ + 0.45]} args={[w + 1.3, 0.16, 0.1]} material={mats.trim} />
+          <Box position={[w * 0.32, totalH + 1.5, -d * 0.15]} args={[0.55, 1.3, 0.55]} material={stoneLite} />
+          <Box position={[w * 0.32, totalH + 2.2, -d * 0.15]} args={[0.7, 0.12, 0.7]} material={mats.dark} />
+        </>
       ) : (
         <>
           <Box
@@ -474,7 +512,9 @@ export function ArchitecturalHouse({
 
       {/* Entrance door */}
       <Box position={[0, 1.35, frontZ + 0.06]} args={[1.25, 2.35, 0.14]} material={mats.dark} />
-      <Box position={[0.35, 1.35, frontZ + 0.14]} args={[0.08, 0.08, 0.08]} material={mats.trim} />
+      <Box position={[-0.28, 1.4, frontZ + 0.14]} args={[0.48, 1.7, 0.04]} material={mats.trim} />
+      <Box position={[0.28, 1.4, frontZ + 0.14]} args={[0.48, 1.7, 0.04]} material={mats.trim} />
+      <Box position={[0.42, 1.2, frontZ + 0.18]} args={[0.06, 0.16, 0.04]} material={mats.accent} />
 
       {/* Ground windows */}
       <RecessedWindow
@@ -571,9 +611,22 @@ export function ArchitecturalHouse({
         </group>
       )}
 
-      <Tree x={-w / 2 - 2.8} z={frontZ - 1} trunk={mats.dark} canopy={mats.grass} />
-      <Tree x={w / 2 + 2.8} z={frontZ - 1.5} trunk={mats.dark} canopy={mats.grass} />
-      <Tree x={-w / 2 - 2.2} z={-d / 2 + 0.5} trunk={mats.dark} canopy={mats.grass} />
+      <group>
+        <Box position={[-w * 0.16, 0.42, frontZ - 2.4]} args={[1.4, 0.08, 0.8]} material={mats.dark} castShadow={false} />
+        {[-0.45, 0.45].map((dx) => (
+          <Box key={`chair-${dx}`} position={[-w * 0.16 + dx, 0.45, frontZ - 1.85]} args={[0.32, 0.7, 0.32]} material={mats.trim} castShadow={false} />
+        ))}
+        <Box position={[w * 0.18, 0.38, 0.2]} args={[1.7, 0.42, 0.75]} material={mats.accent} castShadow={false} />
+        {floors > 1 && (
+          <Box position={[0, storey + 0.4, -d * 0.18]} args={[1.9, 0.32, 1.25]} material={mats.accent} castShadow={false} />
+        )}
+        <Box position={[-w * 0.3 - 0.55, 1.7, frontZ - 0.12]} args={[0.08, 1.35, 0.04]} material={mats.trim} castShadow={false} />
+        <Box position={[w * 0.3 + 0.55, 1.7, frontZ - 0.12]} args={[0.08, 1.35, 0.04]} material={mats.trim} castShadow={false} />
+      </group>
+
+      <Tree x={-w / 2 - 2.8} z={frontZ - 1} trunk={mats.dark} canopy={foliage} />
+      <Tree x={w / 2 + 2.8} z={frontZ - 1.5} trunk={mats.dark} canopy={foliage} />
+      <Tree x={-w / 2 - 2.2} z={-d / 2 + 0.5} trunk={mats.dark} canopy={foliage} />
 
       {/* Hedge */}
       <Box
@@ -584,6 +637,13 @@ export function ArchitecturalHouse({
 
       {evening && (
         <>
+          <pointLight
+            position={[0, 2.1, 0]}
+            intensity={1.4}
+            color="#ffb56a"
+            distance={9}
+            castShadow={false}
+          />
           <pointLight
             position={[-2.2, 2.4, frontZ + 1.6]}
             intensity={2.2}

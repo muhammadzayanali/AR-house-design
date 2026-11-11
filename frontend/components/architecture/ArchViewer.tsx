@@ -2,17 +2,20 @@
 
 import {
   ContactShadows,
-  Environment,
   OrbitControls,
+  PerformanceMonitor,
 } from "@react-three/drei";
-import { Canvas, useThree } from "@react-three/fiber";
-import { ACESFilmicToneMapping, PerspectiveCamera, SRGBColorSpace, Vector3 } from "three";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
+import { ACESFilmicToneMapping, Group, Mesh, PMREMGenerator, PerspectiveCamera, SRGBColorSpace, Vector3, type Material, type Texture } from "three";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { HouseModel, ModelLoadProgress } from "@/components/ar/HouseModel";
 import type { HouseDesign } from "@/lib/types";
 
 import { ArchitecturalHouse } from "./ArchitecturalHouse";
+import { Cc0Surfaces } from "./Cc0Surfaces";
+import { MergeStatic } from "./MergeStatic";
 import type { HouseConfig } from "./materials";
 
 function configFromDesign(design: HouseDesign): HouseConfig {
@@ -49,16 +52,19 @@ export function HouseRenderer({
   footprintOverride,
   arMode = false,
   plotPolygon,
+  simpleGlass = false,
 }: {
   design: HouseDesign;
   evening?: boolean;
   footprintOverride?: { width: number; depth: number };
   arMode?: boolean;
   plotPolygon?: Array<{ x: number; z: number }>;
+  simpleGlass?: boolean;
 }) {
   const useGlb =
     design.model_type === "glb" && Boolean(design.glb_url || design.model_url);
   const mobile = useMemo(() => isMobileClient(), []);
+  const mergeRoot = useRef<Group | null>(null);
   const config = useMemo(() => {
     const base = configFromDesign(design);
     if (!footprintOverride) return base;
@@ -85,7 +91,7 @@ export function HouseRenderer({
             <ArchitecturalHouse
               config={config}
               evening={evening}
-              mobileGlass={mobile || arMode}
+              mobileGlass={simpleGlass || mobile || arMode}
               plotPolygon={plotPolygon}
             />
           }
@@ -95,13 +101,87 @@ export function HouseRenderer({
   }
 
   return (
-    <ArchitecturalHouse
-      config={config}
-      evening={evening}
-      mobileGlass={mobile || arMode}
-      plotPolygon={plotPolygon}
-    />
+    <group ref={mergeRoot}>
+      <ArchitecturalHouse
+        config={config}
+        evening={evening}
+        mobileGlass={simpleGlass || mobile || arMode}
+        plotPolygon={plotPolygon}
+      />
+      <MergeStatic target={mergeRoot} />
+    </group>
   );
+}
+
+function textureBytes(map: Texture | null | undefined, seen: Set<string>) {
+  if (!map || seen.has(map.uuid)) return 0;
+  const image = map.image as { width?: number; height?: number } | undefined;
+  const width = image?.width || 0;
+  const height = image?.height || 0;
+  if (!width || !height) return 0;
+  seen.add(map.uuid);
+  return width * height * 4 * (4 / 3);
+}
+
+function FrameStats() {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  const mb = useRef(0);
+  const step = useRef(0);
+  useFrame(() => {
+    step.current += 1;
+    if (step.current % 30 === 0) {
+      const seen = new Set<string>();
+      let bytes = 0;
+      scene.traverse((obj) => {
+        if (!(obj instanceof Mesh)) return;
+        const material = obj.material as Material | Material[] | undefined;
+        const list = Array.isArray(material) ? material : material ? [material] : [];
+        list.forEach((entry) => {
+          const textured = entry as Material & {
+            map?: Texture | null;
+            normalMap?: Texture | null;
+            roughnessMap?: Texture | null;
+            bumpMap?: Texture | null;
+            aoMap?: Texture | null;
+          };
+          const maps = [textured.map, textured.normalMap, textured.roughnessMap, textured.bumpMap, textured.aoMap];
+          maps.forEach((map) => {
+            bytes += textureBytes(map, seen);
+          });
+        });
+      });
+      bytes += textureBytes(scene.environment, seen);
+      mb.current = bytes / (1024 * 1024);
+    }
+    const record = window as Window & {
+      __plotlineStats?: { fps: number; triangles: number };
+      __plotlineRender?: {
+        calls: number;
+        triangles: number;
+        textures: number;
+        geometries: number;
+        dpr: number;
+        textureMB: number;
+        textureTier: string;
+      };
+      __plotlineTier?: string;
+    };
+    record.__plotlineStats = {
+      fps: 0,
+      triangles: gl.info.render.triangles,
+    };
+    record.__plotlineRender = {
+      calls: gl.info.render.calls,
+      triangles: gl.info.render.triangles,
+      textures: gl.info.memory.textures,
+      geometries: gl.info.memory.geometries,
+      dpr: gl.getPixelRatio(),
+      textureMB: mb.current,
+      textureTier: record.__plotlineTier || "canvas",
+    };
+  });
+  return null;
 }
 
 function ColorManagement({ evening }: { evening: boolean }) {
@@ -109,7 +189,7 @@ function ColorManagement({ evening }: { evening: boolean }) {
   useEffect(() => {
     gl.outputColorSpace = SRGBColorSpace;
     gl.toneMapping = ACESFilmicToneMapping;
-    gl.toneMappingExposure = evening ? 0.85 : 1.05;
+    gl.toneMappingExposure = evening ? 0.9 : 1.18;
   }, [gl, evening]);
   return null;
 }
@@ -161,28 +241,57 @@ function ViewInset({ bottomPx }: { bottomPx: number }) {
   return null;
 }
 
-function SceneLights({ evening, desktopShadows }: { evening: boolean; desktopShadows: boolean }) {
+function SceneLights({ evening }: { evening: boolean }) {
   return (
     <>
       <ambientLight intensity={evening ? 0.22 : 0.4} />
       <hemisphereLight
         args={[evening ? "#1a2230" : "#eef3f8", "#5a6a50", evening ? 0.28 : 0.55]}
       />
-      <directionalLight
-        castShadow={desktopShadows}
-        position={[14, 22, 10]}
-        intensity={evening ? 0.45 : 1.45}
-        shadow-mapSize={desktopShadows ? [1024, 1024] : [512, 512]}
-        shadow-camera-far={60}
-        shadow-camera-left={-24}
-        shadow-camera-right={24}
-        shadow-camera-top={24}
-        shadow-camera-bottom={-24}
-        shadow-bias={-0.0002}
-      />
+      <directionalLight position={[14, 22, 10]} intensity={evening ? 0.45 : 1.45} />
       <directionalLight position={[-8, 10, -6]} intensity={evening ? 0.15 : 0.32} color="#b8c8e0" />
     </>
   );
+}
+
+/** Both HDRIs are filtered once. Toggling Evening only swaps the texture. */
+function PreparedIbl({ evening }: { evening: boolean }) {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  const maps = useRef<{ day: Texture | null; night: Texture | null }>({ day: null, night: null });
+  const [ready, setReady] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    const loader = new HDRLoader();
+    const pmrem = new PMREMGenerator(gl);
+    pmrem.compileEquirectangularShader();
+    Promise.all([
+      loader.loadAsync("/textures/cc0/hdri/day-256.hdr"),
+      loader.loadAsync("/textures/cc0/hdri/evening-256.hdr"),
+    ])
+      .then(([day, night]) => {
+        if (dead) return;
+        maps.current.day = pmrem.fromEquirectangular(day).texture;
+        maps.current.night = pmrem.fromEquirectangular(night).texture;
+        day.dispose();
+        night.dispose();
+        pmrem.dispose();
+        setReady((count) => count + 1);
+      })
+      .catch(() => {
+        pmrem.dispose();
+      });
+    return () => {
+      dead = true;
+    };
+  }, [gl]);
+  useEffect(() => {
+    const next = evening ? maps.current.night : maps.current.day;
+    if (!next) return;
+    scene.environment = next;
+    scene.environmentIntensity = evening ? 0.5 : 0.85;
+  }, [evening, ready, scene]);
+  return null;
 }
 
 export function ArchViewer({
@@ -212,6 +321,8 @@ export function ArchViewer({
     else setEveningLocal(next);
   };
   const mobile = useMemo(() => isMobileClient(), []);
+  const [dprCap, setDprCap] = useState(mobile ? 2 : 1.5);
+  const [pbr, setPbr] = useState(true);
   const w = footprintOverride?.width || design.building_width_m || 12;
   const d = footprintOverride?.depth || design.building_depth_m || 10;
   const h = design.building_height_m || 8;
@@ -246,43 +357,55 @@ export function ArchViewer({
       )}
       <ModelLoadProgress enabled={!generated} />
       <Canvas
-        shadows={!mobile}
-        dpr={[1, mobile ? 1.5 : 2]}
+        shadows={false}
+        dpr={[1, dprCap]}
         camera={{
           position: [w * 1.2, h * 0.55, d * 1.35],
           fov: 38,
           near: 0.15,
           far: 220,
         }}
-        gl={{ antialias: true, powerPreference: "high-performance" }}
+        gl={{ antialias: dprCap > 1, powerPreference: "high-performance" }}
       >
         <ColorManagement evening={evening} />
+        <FrameStats />
+        <PerformanceMonitor
+          ms={250}
+          iterations={8}
+          threshold={0.6}
+          bounds={() => [30, 55]}
+          flipflops={2}
+          onDecline={() => setDprCap((value) => Math.max(1, +(value - 0.25).toFixed(2)))}
+          onFallback={() => {
+            setDprCap(1);
+            setPbr(false);
+          }}
+        />
         <color attach="background" args={[evening ? "#2a2622" : "#5c6166"]} />
         <fog attach="fog" args={[evening ? "#2a2622" : "#5c6166", 55, 140]} />
         <ViewInset bottomPx={viewInsetBottom} />
-        <SceneLights evening={evening} desktopShadows={!mobile} />
+        <SceneLights evening={evening} />
+        <Cc0Surfaces live={pbr} />
         <Suspense fallback={null}>
           <HouseRenderer
             design={design}
             evening={evening}
             footprintOverride={footprintOverride}
             plotPolygon={plotPolygon}
+            simpleGlass
           />
           <ContactShadows
+            frames={1}
+            resolution={256}
             position={[0, 0.01, 0]}
             opacity={evening ? 0.62 : 0.45}
             scale={Math.max(28, w * 3)}
-            blur={2.4}
-            far={22}
+            blur={2.2}
+            far={18}
           />
           <FitCamera widthM={w} depthM={d} heightM={h} />
         </Suspense>
-        <Suspense fallback={null}>
-          <Environment
-            preset={evening ? "sunset" : "city"}
-            environmentIntensity={evening ? 0.55 : 0.85}
-          />
-        </Suspense>
+        {!mobile ? <PreparedIbl evening={evening} /> : null}
         <OrbitControls
           makeDefault
           enablePan
@@ -365,8 +488,8 @@ export function StylePreviewCanvas({
         <ambientLight intensity={0.55} />
         <directionalLight position={[10, 14, 8]} intensity={1.25} />
         <Suspense fallback={null}>
-          <HouseRenderer design={design} />
-          <ContactShadows opacity={0.35} scale={30} blur={2} far={16} />
+          <HouseRenderer design={design} simpleGlass />
+          <ContactShadows frames={1} resolution={256} opacity={0.35} scale={30} blur={2} far={16} />
         </Suspense>
         <OrbitControls
           enableZoom={false}

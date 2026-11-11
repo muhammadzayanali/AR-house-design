@@ -25,19 +25,71 @@ def shoelace_xz(points: Sequence[Mapping[str, float]]) -> float:
     return abs(acc) / 2.0
 
 
-def area_sqm_from_points(points: Iterable[Mapping[str, float]]) -> float:
+def _cross(o: Mapping[str, float], a: Mapping[str, float], b: Mapping[str, float]) -> float:
+    return (float(a["x"]) - float(o["x"])) * (float(b["z"]) - float(o["z"])) - (
+        float(a["z"]) - float(o["z"])
+    ) * (float(b["x"]) - float(o["x"]))
+
+
+def _segments_cross(a, b, c, d) -> bool:
+    """True when open segments AB and CD cross. Shared endpoints do not count."""
+    o1 = _cross(a, b, c)
+    o2 = _cross(a, b, d)
+    o3 = _cross(c, d, a)
+    o4 = _cross(c, d, b)
+    if o1 == 0 or o2 == 0 or o3 == 0 or o4 == 0:
+        return False
+    return (o1 > 0) != (o2 > 0) and (o3 > 0) != (o4 > 0)
+
+
+def _self_intersects(pts: Sequence[Mapping[str, float]]) -> bool:
+    n = len(pts)
+    if n < 4:
+        return False
+    for i in range(n):
+        a, b = pts[i], pts[(i + 1) % n]
+        for j in range(i + 1, n):
+            if abs(i - j) <= 1 or abs(i - j) == n - 1:
+                continue
+            c, d = pts[j], pts[(j + 1) % n]
+            if _segments_cross(a, b, c, d):
+                return True
+    return False
+
+
+def assess_polygon(points: Iterable[Mapping[str, float]]) -> dict:
+    """Polygon area for corners tapped in order.
+
+    Two points are not a plot. Length × width is rectangle_area_sqm only.
+    Collinear corners and bow-ties are rejected. Nothing is squared from a span.
+    """
     pts = list(points)
     if len(pts) < 2:
-        return 0.0
+        return {"status": "empty", "area_sqm": 0.0, "message": "Mark at least three corners."}
     if len(pts) == 2:
-        width = abs(float(pts[0]["x"]) - float(pts[1]["x"]))
-        depth = abs(float(pts[0]["z"]) - float(pts[1]["z"]))
-        area = width * depth
-        if area > 0.5:
-            return area
-        span = distance_xz(pts[0], pts[1])
-        return span * span
-    return shoelace_xz(pts)
+        return {
+            "status": "need_third_corner",
+            "area_sqm": 0.0,
+            "message": "Two corners are not a plot. Mark a third corner, or use length × width.",
+        }
+    if _self_intersects(pts):
+        return {
+            "status": "self_intersecting",
+            "area_sqm": 0.0,
+            "message": "Those corners cross. Tap them in order around the boundary.",
+        }
+    area = shoelace_xz(pts)
+    if area < 0.05:
+        return {
+            "status": "collinear",
+            "area_sqm": 0.0,
+            "message": "Those corners are almost in a line. Walk the boundary, not a single edge.",
+        }
+    return {"status": "ok", "area_sqm": area, "message": ""}
+
+
+def area_sqm_from_points(points: Iterable[Mapping[str, float]]) -> float:
+    return float(assess_polygon(points)["area_sqm"])
 
 
 def rectangle_area_sqm(length_m: float, width_m: float) -> float:

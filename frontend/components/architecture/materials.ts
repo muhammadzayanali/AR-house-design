@@ -3,6 +3,8 @@
 import { useMemo } from "react";
 import { MeshPhysicalMaterial, MeshStandardMaterial } from "three";
 
+import { grassMap, plasterMaps, roofTileMap, stonePaveMap } from "./surfaceTextures";
+
 export type ArchStyle =
   | "modern"
   | "italian"
@@ -39,19 +41,25 @@ export function useArchMaterials(
   const mobileGlass = opts?.mobileGlass !== false;
   return useMemo(() => {
     const s = style.toLowerCase();
+    const wallHex = s.includes("italian")
+      ? "#e6d0b0"
+      : s.includes("cottage")
+        ? "#c9a87a"
+        : s.includes("traditional")
+          ? "#f0e8da"
+          : s.includes("american")
+            ? "#dce3e9"
+            : s.includes("luxury")
+              ? "#ece6dc"
+              : "#ebe8e2";
+    const wallMaps = plasterMaps(wallHex);
     const wall = new MeshStandardMaterial({
-      color: s.includes("italian")
-        ? "#e6d0b0"
-        : s.includes("cottage")
-          ? "#c9a87a"
-          : s.includes("traditional")
-            ? "#f0e8da"
-            : s.includes("american")
-              ? "#dce3e9"
-              : s.includes("luxury")
-                ? "#ece6dc"
-                : "#ebe8e2",
-      roughness: s.includes("italian") ? 0.92 : 0.72,
+      name: "plaster",
+      color: "#ffffff",
+      map: wallMaps.map,
+      bumpMap: wallMaps.bump,
+      bumpScale: 0.035,
+      roughness: s.includes("italian") ? 0.92 : 0.78,
       metalness: 0.04,
     });
 
@@ -64,16 +72,17 @@ export function useArchMaterials(
       metalness: 0.08,
     });
 
+    const pitched =
+      s.includes("italian") ||
+      s.includes("cottage") ||
+      s.includes("traditional") ||
+      s.includes("american");
     const roof = new MeshStandardMaterial({
-      color:
-        s.includes("italian") ||
-        s.includes("cottage") ||
-        s.includes("traditional") ||
-        s.includes("american")
-          ? "#8a3d28"
-          : "#34383e",
-      roughness: 0.88,
-      metalness: 0.06,
+      name: "roof",
+      color: pitched ? "#ffffff" : "#34383e",
+      map: pitched ? roofTileMap() : null,
+      roughness: 0.9,
+      metalness: 0.04,
     });
 
     const glass = new MeshPhysicalMaterial(
@@ -81,13 +90,13 @@ export function useArchMaterials(
         ? {
             color: evening ? "#f3dfb8" : "#a8c4d4",
             transparent: true,
-            opacity: evening ? 0.78 : 0.45,
+            opacity: evening ? 0.5 : 0.45,
             roughness: 0.08,
             metalness: 0.1,
             envMapIntensity: 1.25,
             depthWrite: false,
             emissive: evening ? "#ffc888" : "#000000",
-            emissiveIntensity: evening ? 0.55 : 0,
+            emissiveIntensity: evening ? 0.28 : 0,
           }
         : {
             color: evening ? "#f3dfb8" : "#9ebcd0",
@@ -114,7 +123,9 @@ export function useArchMaterials(
       metalness: 0.12,
     });
     const grass = new MeshStandardMaterial({
-      color: "#4f7344",
+      name: "grass",
+      color: "#ffffff",
+      map: grassMap(),
       roughness: 1,
       metalness: 0,
     });
@@ -127,7 +138,9 @@ export function useArchMaterials(
       metalness: 0.18,
     });
     const pave = new MeshStandardMaterial({
-      color: "#b9b2a6",
+      name: "paving",
+      color: "#ffffff",
+      map: stonePaveMap(),
       roughness: 0.95,
       metalness: 0,
     });

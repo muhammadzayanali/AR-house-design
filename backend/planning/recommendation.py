@@ -17,6 +17,36 @@ from .models import HouseDesign
 from .units import sqm_to_units
 
 
+def _coverage(house: HouseDesign, size: float) -> float:
+    if size <= 0:
+        return 1.0
+    footprint = float(getattr(house, "building_footprint_sqm", 0) or 0)
+    if footprint <= 0:
+        width = float(getattr(house, "building_width_m", 0) or 0)
+        depth = float(getattr(house, "building_depth_m", 0) or 0)
+        footprint = width * depth
+    if footprint <= 0:
+        return 1.0
+    return footprint / size
+
+
+def _price(house: HouseDesign) -> float:
+    listed = float(getattr(house, "estimated_cost_pkr", 0) or 0)
+    if listed > 0:
+        return listed
+    return float(getattr(house, "estimated_cost_min", 0) or 0)
+
+
+def _pick_among(houses: list, size: float) -> Tuple[HouseDesign, list]:
+    """Closest midpoint. Ties: lower ground coverage, then lower catalogue price."""
+    best_dist = min(_midpoint_distance(h, size) for h in houses)
+    tied = [h for h in houses if abs(_midpoint_distance(h, size) - best_dist) < 1e-6]
+    tied.sort(key=lambda h: (_coverage(h, size), _price(h), h.name))
+    chosen = tied[0]
+    also = [h for h in tied[1:]]
+    return chosen, also
+
+
 def recommend_house(land_size_sqm: float) -> Tuple[Optional[HouseDesign], str]:
     size = float(land_size_sqm)
     units = sqm_to_units(size)
@@ -33,7 +63,7 @@ def recommend_house(land_size_sqm: float) -> Tuple[Optional[HouseDesign], str]:
     ]
 
     if in_range:
-        chosen = min(in_range, key=lambda h: _midpoint_distance(h, size))
+        chosen, also = _pick_among(in_range, size)
         reason = (
             "Plot area {label} falls inside the published range for "
             "'{name}' ({style}): {lo:.0f}–{hi:.0f} m². "
@@ -50,6 +80,9 @@ def recommend_house(land_size_sqm: float) -> Tuple[Optional[HouseDesign], str]:
             floors=chosen.floors,
             parking="yes" if chosen.parking else "no",
         )
+        if also:
+            names = ", ".join(h.name for h in also)
+            reason += " Also fits: {0}.".format(names)
         return chosen, reason
 
     chosen = min(catalog, key=lambda h: _midpoint_distance(h, size))

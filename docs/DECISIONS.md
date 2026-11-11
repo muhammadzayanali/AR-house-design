@@ -4,7 +4,7 @@
 
 - Three.js / R3F only. WebXR anchors, hit-test, measurement, and the rule-based recommender are unchanged.
 - Procedural massing stays the catalog renderer. Authored GLBs remain metre-true exports, not claimed as scans.
-- drei `Environment` preset (`city`, blurred background) instead of a downloaded HDRI. A 1k CC0 HDR was not vendored in this pass (network + license file size). Preset is a library asset, not a photoreal claim.
+- Desktop reflections use two Poly Haven CC0 HDRIs (Lebombo by day, Venice Sunset in the evening), downscaled to 256×128 and filtered once with PMREM. Switching Evening swaps the texture. Phones do not download the HDR. The label stays “Generated massing model”.
 
 ## Chosen beyond the brief
 
@@ -16,9 +16,46 @@
 
 ## Camera preview (October 2026)
 
-- Phones without `immersive-ar` get a camera-preview pose: rear camera plus device orientation. The house stays at 1:1 metres. Walking is not tracked, so the house slides if you walk.
+- Phones without `immersive-ar` get a camera-preview pose when the stream reports `facingMode: environment` and a `deviceorientation` event arrives with a real reading. The user-agent string is not the test. iOS still needs the Enable motion button, because that permission has to be requested from a tap. The house stays at 1:1 metres and a drag that would leave the plot is refused. Walking is not tracked, so the house slides if you walk.
 - WebXR session start, anchors, hit-test, measurement, and the recommender were not rewritten.
 - **AlvaAR is not shipped.** It is GPLv3 (Alan Ross, github.com/alanross/AlvaAR). Tracking on empty ground was not run on a real phone over HTTPS from this session, so the WASM is not loaded. The Experimental toggle explains that and stays on camera preview. Do not vendor AlvaAR until a phone test shows the pose holds.
+
+## Catalogue assumptions
+
+The rupee bands on each house row (for example Italian Compact PKR 14–19 million) are catalogue assumptions typed into the seed so the planner has one labelled range. They are not a contractor quote, a bill of quantities, or a published market survey. When an answer talks about construction cost, that catalogue band is the only construction range. LDA map-approval is a separate fee illustration, not a second construction range.
+
+## DEBUG off, tunnel, and Netlify
+
+`DJANGO_DEBUG=false` does not open every host. Set:
+
+- `DJANGO_ALLOWED_HOSTS` to the tunnel hostname (a leading dot allows subdomains, for example `.trycloudflare.com`).
+- `CORS_ALLOWED_ORIGINS` to the Netlify origin, for example `https://your-site.netlify.app`.
+
+Restart the tunnel with `./.tools/cloudflared tunnel --url http://127.0.0.1:8000`. The hostname changes every time. Put that hostname in `frontend/.env.production` as `NEXT_PUBLIC_API_ORIGIN` and in `netlify.toml`, then rebuild the Netlify site. A UI environment variable overrides the toml file, so update both and trigger a new deploy. The old hostname stops answering as soon as the tunnel process stops.
+
+A fixed host does not change on restart:
+
+- Cloudflare named tunnel: `cloudflared tunnel create plotline`, route a DNS name you own, then `cloudflared tunnel run --url http://127.0.0.1:8000 plotline`. Put that stable `https://` name in `DJANGO_ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `NEXT_PUBLIC_API_ORIGIN`.
+- Or localtunnel with a chosen subdomain: `npx localtunnel --port 8000 --subdomain <name>`. The name can be taken by someone else, so it is less stable than a named Cloudflare tunnel.
+
+Backup mode for a recorded demo: if the tunnel or Netlify cannot reach Django, record the flow on `http://127.0.0.1:3000` with Django on port 8000 and play that video. Do not present the recording as a live mobile-data session.
+
+## Result-screen frame rate (12 Nov 2026, this Mac)
+
+Chrome on an AMD Radeon Pro 560X, Italian Family Villa, viewport 1440×900. Before the pass, device pixel ratio 2 produced a 2880×1800 buffer, about 622 draw calls a frame, and a sustained 14 fps (median frame 66 ms). The same scene at ratio 1 was about 29 fps. After the lighting pass the cap is 1.5 (buffer 2160×1350) and draw calls were about 141. Merging static meshes that share a material then brought Italian Family to 12 draws a frame. Median frame time stayed 16.7 ms. No phone was in the room.
+
+Texture GPU estimate is uncompressed RGBA8 plus mipmaps. Eighteen maps at 1024² are 96 MB. The same set at 512² is 24 MB. Phones use the 512 px files because 96 MB is over the 40 MB phone budget. Desktop keeps 1K. The canvas textures remain the first frame and the step-down below 30 fps.
+
+`?debug=1` shows a hidden diagnostics overlay with a Copy report button. It is not part of the normal UI.
+
+## Same Wi-Fi demo
+
+Leave `NEXT_PUBLIC_API_ORIGIN` unset. `npm run dev` or `npm run dev:https` serves the app on `0.0.0.0:3000`, and `next.config.ts` proxies `/api` and `/media` to `DJANGO_ORIGIN` (default `http://127.0.0.1:8000`). Django must listen on `0.0.0.0:8000`.
+
+- Same Wi-Fi: open `http://<laptop-lan-ip>:3000` (or `https://` after `npm run dev:https`).
+- Phone hotspot: the laptop joins the phone’s hotspot, then the phone opens the laptop’s new LAN address. WebXR still needs the HTTPS dev server. Plain `http://` can show the planner but not immersive AR.
+
+A phone was not used for either path.
 
 ## Not done on purpose
 
