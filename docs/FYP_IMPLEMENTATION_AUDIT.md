@@ -103,9 +103,8 @@
 
 ## H. Mobile / AR problems
 
-- Primary target Android Chrome + ARCore — **device verification pending**
-- iOS Safari unsupported — fallback exists
-- HTTPS required — documented in README but needs `/docs/AR_SETUP.md`
+- Device verification is pending. The overlay reports `WebXR immersive-ar` for the phone you test.
+- HTTPS steps: [DEMO_READINESS.md](DEMO_READINESS.md)
 - Point cap of 4 limits irregular plots
 
 ---

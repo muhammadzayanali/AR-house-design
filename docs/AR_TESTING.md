@@ -13,11 +13,11 @@ Playwright mocks / skips WebXR. Passing CI does not mean AR works on a phone.
 | Requirement | Notes |
 |-------------|--------|
 | Android phone | **ARCore-capable** (see [ARCore device list](https://developers.google.com/ar/devices)) |
-| Chrome | Latest stable (**not** Samsung Internet; **not** iPhone Chrome/Safari for immersive-ar) |
+| Browser | The phone you have. `?debug=1` reports `WebXR immersive-ar` true or false for that browser. |
 | Google Play Services for AR | Installed / up to date |
-| HTTPS | Netlify HTTPS or `npm run dev:https` — plain `http://LAN` often cannot start WebXR |
-| Backend running | Django `0.0.0.0:8000` (+ tunnel if Netlify → laptop API) |
-| Frontend running | Netlify or Next `:3000` |
+| HTTPS | Phone camera, motion sensors, and WebXR. Steps and the tunnel host: [DEMO_READINESS.md](DEMO_READINESS.md). |
+| Backend running | Django `0.0.0.0:8000` (tunnel only if the Netlify path in DEMO_READINESS.md is the one in use) |
+| Frontend running | [DEMO_READINESS.md](DEMO_READINESS.md) |
 | Camera permission | Grant when prompted |
 
 ---
@@ -71,7 +71,7 @@ Open application
 | 6 | Move phone slowly | Gold reticle on ground |
 | 7 | Mark corners (e.g. ~15×12 m if known) | Points accumulate |
 | 8 | Finish measurement | Area ≈ expected m² / Marla |
-| 9 | Choose style (Italian Villa) | Style cards (8 styles) |
+| 9 | Choose style (Italian Villa) | 7 seeded styles. The Villa card is a filter, not an eighth seed style. |
 | 10 | Select compatible design | Exact / closest fit + why-it-fits |
 | 11 | View 3D / continue | Same house in Orbit viewer |
 | 12 | Place house on plot | Model anchors on hit point |

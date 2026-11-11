@@ -21,7 +21,7 @@
 
 1. Measurement is approximate (not survey-grade).  
 2. WebXR depends on browser/device; Android Chrome is primary.  
-3. iOS Safari typically lacks the same immersive-ar path.  
+3. Whether immersive AR starts is the overlay line `WebXR immersive-ar` on the phone you tested. Steps: [DEMO_READINESS.md](DEMO_READINESS.md).  
 4. Large plots can drift in AR.  
 5. GLB models are pre-designed (current assets are massing placeholders — replaceable).  
 6. Recommendation is rule-based, not ML.  

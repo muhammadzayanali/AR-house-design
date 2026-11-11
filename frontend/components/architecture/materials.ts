@@ -41,21 +41,23 @@ export function useArchMaterials(
   const mobileGlass = opts?.mobileGlass !== false;
   return useMemo(() => {
     const s = style.toLowerCase();
+    const american = s.includes("american");
     const wallHex = s.includes("italian")
       ? "#e6d0b0"
       : s.includes("cottage")
         ? "#c9a87a"
         : s.includes("traditional")
           ? "#f0e8da"
-          : s.includes("american")
-            ? "#dce3e9"
+          : american
+            ? "#f4f5f6"
             : s.includes("luxury")
               ? "#ece6dc"
               : "#ebe8e2";
     const wallMaps = plasterMaps(wallHex);
     const wall = new MeshStandardMaterial({
       name: "plaster",
-      color: "#ffffff",
+      // American siding stays a gray even after the pale plaster photo replaces the canvas.
+      color: american ? "#7d8b98" : "#ffffff",
       map: wallMaps.map,
       bumpMap: wallMaps.bump,
       bumpScale: 0.035,
@@ -88,9 +90,9 @@ export function useArchMaterials(
     const glass = new MeshPhysicalMaterial(
       mobileGlass
         ? {
-            color: evening ? "#f3dfb8" : "#a8c4d4",
+            color: evening ? "#f3dfb8" : american ? "#4e6c84" : "#a8c4d4",
             transparent: true,
-            opacity: evening ? 0.5 : 0.45,
+            opacity: evening ? 0.5 : american ? 0.82 : 0.45,
             roughness: 0.08,
             metalness: 0.1,
             envMapIntensity: 1.25,
@@ -99,7 +101,7 @@ export function useArchMaterials(
             emissiveIntensity: evening ? 0.28 : 0,
           }
         : {
-            color: evening ? "#f3dfb8" : "#9ebcd0",
+            color: evening ? "#f3dfb8" : american ? "#4e6c84" : "#9ebcd0",
             transmission: evening ? 0.12 : 0.55,
             transparent: true,
             opacity: evening ? 0.9 : 0.55,

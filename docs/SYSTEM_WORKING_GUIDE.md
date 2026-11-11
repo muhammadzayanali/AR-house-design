@@ -209,9 +209,7 @@ These are **configured constants**, not ML parameters.
 
 ### 4.1 How it works
 
-1. After area ≥ 10 m², user opens **style picker** (8 styles):
-   Modern, Italian Villa, American, Cottage / Hut, Contemporary, Traditional, Villa, Luxury Villa.
-   (`GET /api/styles/` — `StyleCatalogView.STYLES`)
+1. After area ≥ 10 m², user opens the **style picker**. The seed (`seed_houses.STYLES`) has 7 styles: Modern, Italian Villa, American, Cottage / Hut, Contemporary, Traditional, Luxury Villa. `GET /api/styles/` (`StyleCatalogView.STYLES`) adds an eighth card, Villa, which filters rows whose style contains “villa”. Villa is not a seed style.
 2. API: `GET /api/designs/match/?style=Italian%20Villa&plot_area=180`
 3. Backend filters `HouseDesign` where:
    - `active = True`
@@ -426,7 +424,7 @@ Sources:
 | 4 | **Area from AR** | Points | Shoelace / 2-pt rectangle | m² |
 | 5 | **Manual L×W** | metres | \(L\times W\) | m² (fallback) |
 | 6 | **Unit conversion** | m² | ÷ Marla/Kanal/Acre constants | Local units |
-| 7 | **Style picker (8 styles)** | Style id | List styles API | UI cards + 3D preview |
+| 7 | **Style picker (7 seeded styles)** | Style id | List styles API | UI cards + 3D preview |
 | 8 | **Design match** | style + plot m² | Range filter | Exact / nearby designs |
 | 9 | **Feasibility** | plot + house dims | Remaining + coverage % | Status + note |
 | 10 | **Space estimate** | plot m² | Band table | Preliminary rooms hint |

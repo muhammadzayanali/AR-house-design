@@ -32,7 +32,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const url = resolveApiUrl(path);
-  // localtunnel interstitial returns 511 HTML unless this header is set
+  // A loca.lt reminder page returns 511 HTML unless this header is set.
   if (/loca\.lt/i.test(url)) {
     headers.set("Bypass-Tunnel-Reminder", "true");
   }
@@ -47,7 +47,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       /tunnel website ahead|network authentication required/i.test(text)
     ) {
       throw new ApiError(
-        "API tunnel blocked (loca.lt reminder page). Redeploy after the Bypass-Tunnel-Reminder fix, or open http://YOUR_LAN_IP:3000 on the same Wi‑Fi instead of Netlify.",
+        "API tunnel blocked by a reminder page. The tunnel host is in docs/DEMO_READINESS.md. On the same Wi-Fi, use the HTTPS laptop address in that file instead of Netlify.",
         511,
         null,
       );
@@ -55,7 +55,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
     if (response.status === 502 || response.status === 503) {
       throw new ApiError(
-        "API tunnel is down or overloaded (502/503). On the laptop keep Django + localtunnel running, then retry — or open http://192.168.2.105:3000 on the same Wi‑Fi.",
+        "API tunnel is down or overloaded (502/503). On the laptop keep Django and the tunnel in docs/DEMO_READINESS.md running, then retry, or use the same-Wi-Fi HTTPS address in that file.",
         response.status,
         text.slice(0, 200),
       );
@@ -141,7 +141,7 @@ export function resolveMediaUrl(url: string | null | undefined): string | null {
 
   const origin = (process.env.NEXT_PUBLIC_API_ORIGIN || "").replace(/\/$/, "");
 
-  // localtunnel interstitial blocks bare <img> GETs (no Bypass header).
+  // A tunnel reminder page blocks bare <img> GETs (no Bypass header).
   // Same-origin Next proxy adds the header server-side.
   if (origin && /loca\.lt/i.test(origin) && pathname.startsWith("/media/")) {
     return `/api/media-proxy/${pathname.slice("/media/".length)}`;

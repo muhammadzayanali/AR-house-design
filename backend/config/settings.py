@@ -92,7 +92,7 @@ APPEND_SLASH = True
 CORS_ALLOW_ALL_ORIGINS = _HOSTS["cors_allow_all"]
 CORS_ALLOWED_ORIGINS = _HOSTS["cors_origins"]
 CORS_ALLOW_CREDENTIALS = True
-# Needed when the browser calls *.loca.lt with Bypass-Tunnel-Reminder.
+# Lets the media proxy send Bypass-Tunnel-Reminder when a tunnel asks for it.
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "bypass-tunnel-reminder",
 ]

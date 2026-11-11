@@ -13,8 +13,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Browser API → tunnel. Media <img> uses /api/media-proxy (same origin) → tunnel.
-  # Cloudflare quick tunnel (URL changes on restart): ./.tools/cloudflared tunnel --url http://127.0.0.1:8000
+  # Current tunnel host. Same value as frontend/.env.production. See docs/DEMO_READINESS.md.
+  # This is a Cloudflare quick tunnel, not localtunnel. The name dies when cloudflared stops.
+  # Do not replace it with a guessed hostname.
   NEXT_PUBLIC_API_ORIGIN = "https://inbox-sbjct-dominant-dating.trycloudflare.com"
   DJANGO_ORIGIN = "https://inbox-sbjct-dominant-dating.trycloudflare.com"
 

@@ -22,9 +22,14 @@ const nextConfig: NextConfig = {
     "192.168.2.105",
   ],
   async rewrites() {
+    // afterFiles runs before dynamic routes, so /api/media-proxy must not match
+    // or the catch-all would forward it to Django /api instead of the proxy route.
+    const api = "/api/:slug((?!media-proxy)[^/]+)";
     return [
-      { source: "/api/:path*/", destination: `${djangoOrigin}/api/:path*/` },
-      { source: "/api/:path*", destination: `${djangoOrigin}/api/:path*/` },
+      { source: `${api}/:rest*/`, destination: `${djangoOrigin}/api/:slug/:rest*/` },
+      { source: `${api}/:rest*`, destination: `${djangoOrigin}/api/:slug/:rest*/` },
+      { source: `${api}/`, destination: `${djangoOrigin}/api/:slug/` },
+      { source: api, destination: `${djangoOrigin}/api/:slug/` },
       { source: "/media/:path*", destination: `${djangoOrigin}/media/:path*` },
     ];
   },

@@ -47,7 +47,7 @@ cd backend
 cd frontend
 npm install
 npm run dev
-# AR phone: npm run dev:https
+# Phone demo: ../scripts/demo_up.sh  (docs/DEMO_READINESS.md)
 ```
 
 Open http://localhost:3000

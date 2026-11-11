@@ -1,6 +1,6 @@
 # Design Catalog
 
-## Styles (8 — style picker)
+## Styles (7 seeded, plus a Villa filter card)
 
 From `GET /api/styles/` (`StyleCatalogView`):
 

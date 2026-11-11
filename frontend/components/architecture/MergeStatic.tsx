@@ -19,8 +19,13 @@ export function MergeStatic({ target }: { target: RefObject<Group | null> }) {
       const material = obj.material;
       if (!material || Array.isArray(material)) return;
       if (material.type === "ShadowMaterial" || material.type === "ShaderMaterial") return;
-      const geometry = obj.geometry.clone();
+      let geometry = obj.geometry.clone();
       geometry.applyMatrix4(new Matrix4().multiplyMatrices(inverse, obj.matrixWorld));
+      if (geometry.index) {
+        const flat = geometry.toNonIndexed();
+        geometry.dispose();
+        geometry = flat;
+      }
       const signature = Object.keys(geometry.attributes).sort().join(",");
       const key = `${material.uuid}:${signature}`;
       const bucket = buckets.get(key) ?? {

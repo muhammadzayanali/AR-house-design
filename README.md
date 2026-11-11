@@ -14,7 +14,7 @@ BS Computer Science Final Year Project. Browser-only (no native app). Primary de
 5. Place a true-to-scale `.glb` on the real ground and walk around it.
 6. Save the project and generate an **LLM-narrated report** + Q&A.
 
-Unsupported browsers (typical iOS Safari) get a **manual rectangle form + OrbitControls 3D viewer**. No computer vision / obstacle detection — that is out of scope.
+When the debug overlay reports `WebXR immersive-ar` false, use the **manual rectangle form + OrbitControls 3D viewer**. No computer vision / obstacle detection — that is out of scope.
 
 ## Architecture (viva map)
 
@@ -108,27 +108,9 @@ Open [http://localhost:3000](http://localhost:3000). Next.js proxies `/api/*` an
 
 Default demo user: register at `/register`.
 
-### HTTPS on a real Android phone (WebXR)
+### Phone demo
 
-WebXR **will not** start on `http://192.168.x.x`.
-
-```bash
-cd frontend
-npm run dev:https
-```
-
-On the phone (same Wi-Fi), open `https://YOUR_LAN_IP:3000`. Accept the certificate warning, then **Enter AR** in Chrome.
-
-If the self-signed cert blocks WebXR, use ngrok instead:
-
-```bash
-npm run dev          # terminal 1
-ngrok http 3000      # terminal 2 — open the https URL on the phone
-```
-
-Requirements on the device: **Android Chrome**, **Google Play Services for AR (ARCore)**.
-
-Put your LAN IP in `frontend/next.config.ts` → `allowedDevOrigins` if hot reload is blocked.
+The production HTTPS steps are in [docs/DEMO_READINESS.md](docs/DEMO_READINESS.md). The overlay reports `WebXR immersive-ar` for the phone you open.
 
 ## Placeholder 3D models
 
@@ -167,4 +149,4 @@ Header: `Authorization: Token <token>`.
 
 ## Out of scope (v1)
 
-Camera-based scene understanding, obstacle detection, VLM / vision models, custom-trained recommenders, iOS Safari WebXR (use the fallback viewer).
+Camera-based scene understanding, obstacle detection, VLM / vision models, custom-trained recommenders. When the overlay reports `WebXR immersive-ar` false, use the fallback viewer.

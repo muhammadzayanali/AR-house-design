@@ -59,18 +59,11 @@ Verified against `seed_houses.py` Italian Compact Villa row (120–180, 10×9, 3
 
 ---
 
-## Style picker (8 styles)
+## Style picker
 
-1. Modern  
-2. Italian Villa  
-3. American  
-4. Cottage / Hut  
-5. Contemporary  
-6. Traditional  
-7. Villa  
-8. Luxury Villa  
+Seeded styles in `seed_houses.STYLES` (7): Modern, Italian Villa, American, Cottage / Hut, Contemporary, Traditional, Luxury Villa.
 
-Source of truth: `StyleCatalogView.STYLES` in `backend/planning/views.py`.
+`StyleCatalogView.STYLES` adds a Villa card. That card filters rows whose style contains “villa”. It is not an eighth seed style.
 
 ---
 
